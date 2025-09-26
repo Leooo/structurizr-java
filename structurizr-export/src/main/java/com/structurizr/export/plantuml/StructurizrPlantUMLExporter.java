@@ -114,7 +114,7 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             writer.writeLine("}");
         }
 
-        if (!renderAsSequenceDiagram(view)) {
+        //if (!renderAsSequenceDiagram(view)) {
             // boundaries
             List<Element> boundaryElements = new ArrayList<>();
             if (view instanceof ContainerView) {
@@ -144,7 +144,7 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
                 writer.outdent();
                 writer.writeLine("}");
             }
-        }
+        //}
 
         writer.writeLine();
     }

@@ -36,24 +36,33 @@ skinparam sequenceParticipant<<d.e.h>> {
   BorderColor #9a9a9a
   shadowing false
 }
+skinparam rectangle<<A.B>> {
+  BorderColor #9a9a9a
+  FontColor #9a9a9a
+  shadowing false
+}
 
-box "A\n[Software System]"
-    box "B\n[Container]"
-      participant "C\n<size:10>[Component]</size>" as A.B.C <<A.B.C>> #dddddd
-    end box
+skinparam rectangle<<d.e>> {
+  BorderColor #9a9a9a
+  FontColor #9a9a9a
+  shadowing false
+}
 
-  end box
+skinparam box {
 
-box "d\n[Software System]"
-    box "e\n[Container]"
-      participant "f\n<size:10>[Component]</size>" as d.e.f <<d.e.f>> #dddddd
-      participant "g\n<size:10>[Component]</size>" as d.e.g <<d.e.g>> #dddddd
-      participant "h\n<size:10>[Component]</size>" as d.e.h <<d.e.h>> #dddddd
-    end box
+}
+<style>
+    box {
+       .A {
+       BackgroundColor #9a9a9a
+       FontColor Red
+       }
+    }
+</style>
 
-  end box
-
-d.e.f -[#707070]> d.e.h : 
-A.B.C -[#707070]> d.e.f : 
-d.e.f -[#707070]> d.e.g : 
-@enduml
+box "A" <<A>>
+   box "B" <<A.B>>
+      participant "C<size:10>[ComponentPP]</size>" as A.B.C <<A.B.C>> #dddddd
+   end box
+end box
+ @enduml
