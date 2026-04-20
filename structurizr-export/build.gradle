@@ -3,7 +3,17 @@ dependencies {
     api project(':structurizr-core')
 
     testImplementation project(':structurizr-client')
+    testImplementation project(':structurizr-dsl')
 
 }
 
 description = 'Export Structurizr models and views to external formats'
+
+tasks.register('regenerateTestWorkspaces', JavaExec) {
+    group = 'verification'
+    description = 'Regenerates JSON workspaces under src/test/resources from DSL sources'
+
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.structurizr.export.RegenerateTestWorkspaces'
+    workingDir = rootProject.projectDir
+}

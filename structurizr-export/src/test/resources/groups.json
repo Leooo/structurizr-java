@@ -2,9 +2,7 @@
   "configuration" : { },
   "description" : "Description",
   "documentation" : { },
-  "id" : 1,
-  "lastModifiedAgent" : "structurizr-ui",
-  "lastModifiedDate" : "2025-09-29T14:50:11Z",
+  "id" : 0,
   "model" : {
     "properties" : {
       "structurizr.groupSeparator" : "/"
@@ -12,7 +10,6 @@
     "softwareSystems" : [ {
       "documentation" : { },
       "id" : "1",
-      "location" : "Unspecified",
       "name" : "A",
       "properties" : {
         "structurizr.dsl.identifier" : "a"
@@ -28,7 +25,6 @@
       "documentation" : { },
       "group" : "Group 1",
       "id" : "2",
-      "location" : "Unspecified",
       "name" : "B",
       "properties" : {
         "structurizr.dsl.identifier" : "b"
@@ -44,7 +40,6 @@
       "documentation" : { },
       "group" : "Group 2",
       "id" : "3",
-      "location" : "Unspecified",
       "name" : "C",
       "properties" : {
         "structurizr.dsl.identifier" : "c"
@@ -122,7 +117,6 @@
       "documentation" : { },
       "group" : "Group 2/Group 3",
       "id" : "4",
-      "location" : "Unspecified",
       "name" : "D",
       "properties" : {
         "structurizr.dsl.identifier" : "d"
@@ -137,7 +131,7 @@
   "views" : {
     "componentViews" : [ {
       "automaticLayout" : {
-        "applied" : true,
+        "applied" : false,
         "edgeSeparation" : 0,
         "implementation" : "Graphviz",
         "nodeSeparation" : 300,
@@ -146,51 +140,39 @@
         "vertices" : false
       },
       "containerId" : "6",
-      "dimensions" : {
-        "height" : 2065,
-        "width" : 1212
-      },
       "elements" : [ {
         "id" : "3",
-        "x" : 200,
-        "y" : 165
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "7",
-        "x" : 542,
-        "y" : 765
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "8",
-        "x" : 488,
-        "y" : 1365
+        "x" : 0,
+        "y" : 0
       } ],
       "externalContainerBoundariesVisible" : false,
       "key" : "Components",
+      "name" : "Component View: D - F",
       "order" : 3,
       "relationships" : [ {
         "id" : "13"
       }, {
-        "id" : "15",
-        "vertices" : [ {
-          "x" : 259,
-          "y" : 661
-        }, {
-          "x" : 259,
-          "y" : 1065
-        } ]
+        "id" : "15"
       }, {
         "id" : "16"
       } ]
     } ],
     "configuration" : {
       "branding" : { },
-      "lastSavedView" : "Components",
-      "metadataSymbols" : "SquareBrackets",
       "styles" : { },
       "terminology" : { }
     },
     "containerViews" : [ {
       "automaticLayout" : {
-        "applied" : true,
+        "applied" : false,
         "edgeSeparation" : 0,
         "implementation" : "Graphviz",
         "nodeSeparation" : 300,
@@ -198,25 +180,22 @@
         "rankSeparation" : 300,
         "vertices" : false
       },
-      "dimensions" : {
-        "height" : 1465,
-        "width" : 1660
-      },
       "elements" : [ {
         "id" : "3",
-        "x" : 594,
-        "y" : 165
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "5",
-        "x" : 219,
-        "y" : 765
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "6",
-        "x" : 969,
-        "y" : 765
+        "x" : 0,
+        "y" : 0
       } ],
       "externalSoftwareSystemBoundariesVisible" : false,
       "key" : "Containers",
+      "name" : "Container View: D",
       "order" : 2,
       "relationships" : [ {
         "id" : "11"
@@ -247,12 +226,13 @@
       } ],
       "externalBoundariesVisible" : false,
       "key" : "Dynamic",
+      "name" : "Dynamic View: D - F",
       "order" : 4,
       "properties" : {
-        "mermaid.sequenceDiagram" : "true",
-        "mermaid.title" : "true",
         "plantuml.sequenceDiagram" : "true",
-        "plantuml.teoz" : "true"
+        "plantuml.teoz" : "true",
+        "mermaid.sequenceDiagram" : "true",
+        "mermaid.title" : "true"
       },
       "relationships" : [ {
         "id" : "16",
@@ -262,7 +242,7 @@
     } ],
     "systemLandscapeViews" : [ {
       "automaticLayout" : {
-        "applied" : true,
+        "applied" : false,
         "edgeSeparation" : 0,
         "implementation" : "Graphviz",
         "nodeSeparation" : 300,
@@ -270,29 +250,26 @@
         "rankSeparation" : 300,
         "vertices" : false
       },
-      "dimensions" : {
-        "height" : 2648,
-        "width" : 930
-      },
       "elements" : [ {
         "id" : "1",
-        "x" : 239,
-        "y" : 165
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "2",
-        "x" : 239,
-        "y" : 765
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "3",
-        "x" : 239,
-        "y" : 1365
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "4",
-        "x" : 239,
-        "y" : 1965
+        "x" : 0,
+        "y" : 0
       } ],
       "enterpriseBoundaryVisible" : true,
       "key" : "SystemLandscape",
+      "name" : "System Landscape View",
       "order" : 1,
       "relationships" : [ {
         "id" : "10"

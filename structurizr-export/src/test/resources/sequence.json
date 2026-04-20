@@ -2,9 +2,7 @@
   "configuration" : { },
   "description" : "Description",
   "documentation" : { },
-  "id" : 1,
-  "lastModifiedAgent" : "structurizr-ui",
-  "lastModifiedDate" : "2025-10-02T10:16:15Z",
+  "id" : 0,
   "model" : {
     "properties" : {
       "structurizr.groupSeparator" : "/"
@@ -62,7 +60,6 @@
       } ],
       "documentation" : { },
       "id" : "1",
-      "location" : "Unspecified",
       "name" : "A",
       "properties" : {
         "structurizr.dsl.identifier" : "a"
@@ -136,7 +133,6 @@
       } ],
       "documentation" : { },
       "id" : "4",
-      "location" : "Unspecified",
       "name" : "d",
       "properties" : {
         "structurizr.dsl.identifier" : "d"
@@ -151,22 +147,20 @@
   "views" : {
     "configuration" : {
       "branding" : { },
-      "lastSavedView" : "Sequence-Container",
-      "metadataSymbols" : "SquareBrackets",
       "properties" : {
-        "mermaid.sequenceDiagram" : "true",
-        "mermaid.title" : "true",
         "plantuml.sequenceDiagram" : "true",
         "plantuml.teoz" : "true",
-        "structurizr.softwareSystemBoundaries" : "true"
+        "structurizr.softwareSystemBoundaries" : "true",
+        "mermaid.sequenceDiagram" : "true",
+        "mermaid.title" : "true"
       },
       "styles" : {
         "elements" : [ {
-          "background" : "#add8e6",
-          "tag" : "Software System"
-        }, {
           "background" : "#f5f5dc",
           "tag" : "Container"
+        }, {
+          "background" : "#add8e6",
+          "tag" : "Software System"
         } ]
       },
       "terminology" : { }
@@ -193,6 +187,7 @@
       } ],
       "externalBoundariesVisible" : false,
       "key" : "Sequence-SoftwareSystem",
+      "name" : "Dynamic View: A",
       "order" : 1,
       "relationships" : [ {
         "id" : "9",
@@ -201,7 +196,7 @@
       } ]
     }, {
       "automaticLayout" : {
-        "applied" : true,
+        "applied" : false,
         "edgeSeparation" : 0,
         "implementation" : "Graphviz",
         "nodeSeparation" : 300,
@@ -209,30 +204,27 @@
         "rankSeparation" : 300,
         "vertices" : false
       },
-      "dimensions" : {
-        "height" : 2131,
-        "width" : 1680
-      },
       "elementId" : "5",
       "elements" : [ {
         "id" : "3",
-        "x" : 615,
-        "y" : 185
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "6",
-        "x" : 615,
-        "y" : 831
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "7",
-        "x" : 240,
-        "y" : 1431
+        "x" : 0,
+        "y" : 0
       }, {
         "id" : "8",
-        "x" : 990,
-        "y" : 1431
+        "x" : 0,
+        "y" : 0
       } ],
       "externalBoundariesVisible" : false,
       "key" : "Sequence-Container",
+      "name" : "Dynamic View: d - e",
       "order" : 2,
       "relationships" : [ {
         "id" : "13",
