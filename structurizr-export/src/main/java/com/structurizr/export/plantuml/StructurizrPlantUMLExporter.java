@@ -202,7 +202,7 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             writer.indent();
         } else {
             writer.writeLine(
-                    String.format("box \"%s\n%s\" <<%s>>",
+                    String.format("box \"%s\\n%s\" <<%s>>",
                             softwareSystem.getName(),
                             typeOf(view, softwareSystem, true),
                             plantUMLBoundaryStyle.getClassSelector()
@@ -253,7 +253,7 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             writer.indent();
         } else {
             writer.writeLine(
-                    String.format("box \"%s\n%s\" <<%s>>",
+                    String.format("box \"%s\\n%s\" <<%s>>",
                             container.getName(),
                             typeOf(view, container, true),
                             plantUMLBoundaryStyle.getClassSelector()
