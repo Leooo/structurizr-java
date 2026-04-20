@@ -1242,17 +1242,6 @@ public class StructurizrPlantUMLDiagramExporterTests extends AbstractExporterTes
                   }
                 </style>
                                
-                box "A\\n[Software System]" <<Boundary-QQ==>>
-                  box
-                      box "B\\n[Container]" <<Boundary-Qg==>>
-                        box
-                          participant "C\\n<size:16>[Component]</size>" as A.B.C <<Element-RWxlbWVudA==>> #ffffff
-                        end box
-                      end box
-                               
-                    end box
-                  end box
-                               
                 box "d\\n[Software System]" <<Boundary-ZA==>>
                   box
                       box "e\\n[Container]" <<Boundary-ZQ==>>
@@ -1261,11 +1250,22 @@ public class StructurizrPlantUMLDiagramExporterTests extends AbstractExporterTes
                             box
                                
                               participant "f\\n<size:16>[Component]</size>" as d.e.f <<Element-RWxlbWVudA==>> #ffffff
-                              participant "g\\n<size:16>[Component]</size>" as d.e.g <<Element-RWxlbWVudA==>> #ffffff
                               participant "h\\n<size:16>[Component]</size>" as d.e.h <<Element-RWxlbWVudA==>> #ffffff
+                              participant "g\\n<size:16>[Component]</size>" as d.e.g <<Element-RWxlbWVudA==>> #ffffff
                             end box
                           end box
                                
+                        end box
+                      end box
+                               
+                    end box
+                  end box
+                               
+                box "A\\n[Software System]" <<Boundary-QQ==>>
+                  box
+                      box "B\\n[Container]" <<Boundary-Qg==>>
+                        box
+                          participant "C\\n<size:16>[Component]</size>" as A.B.C <<Element-RWxlbWVudA==>> #ffffff
                         end box
                       end box
                                
