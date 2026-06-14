@@ -15,7 +15,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
     protected final ColorScheme colorScheme;
 
-    private Object frame = null;
+    protected Object frame = null;
 
     public AbstractDiagramExporter() {
         this(ColorScheme.Light);
@@ -388,7 +388,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         return diagram;
     }
 
-    public Diagram export(DynamicView view, String order) {
+     public Diagram export(DynamicView view, String order) {
         this.frame = order;
         IndentingWriter writer = new IndentingWriter();
         writeHeader(view, writer);
@@ -406,6 +406,9 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                 elementsWritten = true;
             }
         } else {
+            // Pre-compute first-appearance order so out-of-scope elements are emitted in step order
+            Map<String, Integer> firstAppearanceOrder = getFirstAppearanceOrder(view);
+
             if (element instanceof SoftwareSystem) {
                 // dynamic view with software system scope
                 List<SoftwareSystem> softwareSystems = getBoundarySoftwareSystems(view);
@@ -418,7 +421,9 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                     endSoftwareSystemBoundary(view, writer);
                 }
 
-                for (ElementView elementView : view.getElements()) {
+                List<ElementView> outOfScopeElements = new ArrayList<>(view.getElements());
+                outOfScopeElements.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+                for (ElementView elementView : outOfScopeElements) {
                     if (elementView.getElement().getParent() == null) {
                         writeElement(view, elementView.getElement(), writer);
                         elementsWritten = true;
@@ -454,7 +459,9 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                     }
                 }
 
-                for (ElementView elementView : view.getElements()) {
+                List<ElementView> outOfScopeElements = new ArrayList<>(view.getElements());
+                outOfScopeElements.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+                for (ElementView elementView : outOfScopeElements) {
                     if (!(elementView.getElement().getParent() instanceof Container)) {
                         writeElement(view, elementView.getElement(), writer);
                         elementsWritten = true;
@@ -462,6 +469,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                 }
             }
         }
+
 
         if (elementsWritten) {
             writer.writeLine();
@@ -784,7 +792,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         return view.getViewSet().getConfiguration().getStyles().findRelationshipStyle(relationship, colorScheme);
     }
 
-    private Map<String, Integer> getFirstAppearanceOrder(DynamicView view) {
+    protected Map<String, Integer> getFirstAppearanceOrder(DynamicView view) {
         Map<String, Integer> order = new LinkedHashMap<>();
         int index = 0;
         for (RelationshipView rv : view.getRelationships()) {

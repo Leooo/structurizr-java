@@ -348,6 +348,122 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
     }
 
     @Override
+    public Diagram export(DynamicView view, String order) {
+        if (!renderAsSequenceDiagram(view)) {
+            return super.export(view, order);
+        }
+
+        // Sequence diagram: out-of-scope elements (e.g. a frontend app) must be written in
+        // dynamic-step-appearance order relative to the in-scope boundary blocks.
+        // The base class writes all boundary boxes first and all out-of-scope elements last,
+        // which puts a step-1 initiator on the far right of the diagram.
+        // We fix this by splitting out-of-scope elements into two groups:
+        //   "before" — first appear before any in-scope element in the step sequence
+        //   "after"  — first appear after at least one in-scope element
+        // and writing: before-elements, then boundary boxes, then after-elements.
+        this.frame = order;
+        IndentingWriter writer = new IndentingWriter();
+        writeHeader(view, writer);
+
+        Map<String, Integer> firstAppearanceOrder = getFirstAppearanceOrder(view);
+
+        Element scopeElement = view.getElement();
+        if (scopeElement == null) {
+            // No scope — delegate entirely to base class behaviour
+            List<GroupableElement> elements = getGroupableElements(view, null);
+            writeElements(view, elements, writer);
+            if (!elements.isEmpty()) writer.writeLine();
+            writeRelationships(view, writer);
+            writeFooter(view, writer);
+            return createDiagram(view, writer.toString());
+        }
+
+        // Determine the first-appearance index of any in-scope element
+        int firstInScopeIndex = Integer.MAX_VALUE;
+        for (ElementView ev : view.getElements()) {
+            Element el = ev.getElement();
+            boolean inScope = (scopeElement instanceof Container && el.getParent() instanceof Container)
+                    || (scopeElement instanceof SoftwareSystem && el.getParent() != null && !(el.getParent() instanceof Container));
+            if (inScope) {
+                int idx = firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE);
+                if (idx < firstInScopeIndex) firstInScopeIndex = idx;
+            }
+        }
+
+        // Collect out-of-scope elements sorted by step appearance
+        List<ElementView> outOfScope = new ArrayList<>();
+        for (ElementView ev : view.getElements()) {
+            Element el = ev.getElement();
+            boolean inScope = (scopeElement instanceof Container && el.getParent() instanceof Container)
+                    || (scopeElement instanceof SoftwareSystem && el.getParent() != null && !(el.getParent() instanceof Container));
+            if (!inScope) outOfScope.add(ev);
+        }
+        outOfScope.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+
+        // Write out-of-scope elements that appear before any in-scope element
+        boolean wrotePrelude = false;
+        for (ElementView ev : outOfScope) {
+            int idx = firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE);
+            if (idx < firstInScopeIndex) {
+                writeElement(view, ev.getElement(), writer);
+                wrotePrelude = true;
+            }
+        }
+
+        // Write in-scope boundary blocks (unchanged base-class logic)
+        if (scopeElement instanceof SoftwareSystem) {
+            List<SoftwareSystem> softwareSystems = getBoundarySoftwareSystems(view);
+            for (SoftwareSystem softwareSystem : softwareSystems) {
+                startSoftwareSystemBoundary(view, softwareSystem, writer);
+                List<GroupableElement> scopedElements = getGroupableElements(view, softwareSystem);
+                writeElements(view, scopedElements, writer);
+                endSoftwareSystemBoundary(view, writer);
+            }
+        } else if (scopeElement instanceof Container) {
+            boolean includeSoftwareSystemBoundaries = "true".equalsIgnoreCase(getViewOrViewSetProperty(view, "structurizr.softwareSystemBoundaries", "false"));
+            List<Container> containers = getBoundaryContainers(view);
+            Set<SoftwareSystem> softwareSystems = containers.stream().map(Container::getSoftwareSystem).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            for (SoftwareSystem softwareSystem : softwareSystems) {
+                if (includeSoftwareSystemBoundaries) {
+                    startSoftwareSystemBoundary(view, softwareSystem, writer);
+                    writer.indent();
+                }
+                for (Container container : containers) {
+                    if (container.getSoftwareSystem() == softwareSystem) {
+                        startContainerBoundary(view, container, writer);
+                        List<GroupableElement> scopedElements = getGroupableElements(view, container);
+                        writeElements(view, scopedElements, writer);
+                        endContainerBoundary(view, writer);
+                    }
+                }
+                if (includeSoftwareSystemBoundaries) {
+                    endSoftwareSystemBoundary(view, writer);
+                    writer.outdent();
+                }
+            }
+        }
+
+        // Write out-of-scope elements that appear after the first in-scope element
+        boolean wrotePostlude = false;
+        for (ElementView ev : outOfScope) {
+            int idx = firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE);
+            if (idx >= firstInScopeIndex) {
+                writeElement(view, ev.getElement(), writer);
+                wrotePostlude = true;
+            }
+        }
+
+        if (wrotePrelude || wrotePostlude) {
+            writer.writeLine();
+        }
+
+        writeRelationships(view, writer);
+        writeFooter(view, writer);
+
+        return createDiagram(view, writer.toString());
+    }
+
+    @Override
     protected void writeElement(ModelView view, Element element, IndentingWriter writer) {
         ElementStyle elementStyle = findElementStyle(view, element);
         PlantUMLElementStyle plantUMLElementStyle = new PlantUMLElementStyle(

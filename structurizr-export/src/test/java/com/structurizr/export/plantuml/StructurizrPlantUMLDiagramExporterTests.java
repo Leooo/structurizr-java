@@ -3495,6 +3495,7 @@ public class StructurizrPlantUMLDiagramExporterTests extends AbstractExporterTes
                       }
                     </style>
                                         
+                    participant "Single-Page Application\\n<size:16>[Container: JavaScript and Angular]</size>" as InternetBankingSystem.SinglePageApplication <<Element-RWxlbWVudCxDb250YWluZXIsV2ViIEJyb3dzZXI=>> #438dd5
                     box "API Application\\n[Container: Java and Spring MVC]" <<Boundary-QVBJIEFwcGxpY2F0aW9u>>
                       box
                         participant "Sign In Controller\\n<size:16>[Component: Spring MVC Rest Controller]</size>" as InternetBankingSystem.APIApplication.SignInController <<Element-RWxlbWVudCxDb21wb25lbnQ=>> #85bbf0
@@ -3502,7 +3503,6 @@ public class StructurizrPlantUMLDiagramExporterTests extends AbstractExporterTes
                       end box
                     end box
                                         
-                    participant "Single-Page Application\\n<size:16>[Container: JavaScript and Angular]</size>" as InternetBankingSystem.SinglePageApplication <<Element-RWxlbWVudCxDb250YWluZXIsV2ViIEJyb3dzZXI=>> #438dd5
                     database "Database\\n<size:16>[Container: Oracle Database Schema]</size>" as InternetBankingSystem.Database <<Element-RWxlbWVudCxDb250YWluZXIsRGF0YWJhc2U=>> #438dd5
                                         
                     InternetBankingSystem.SinglePageApplication -> InternetBankingSystem.APIApplication.SignInController <<Relationship-UmVsYXRpb25zaGlw>> : 1: Submits credentials to\\n<size:16>[JSON/HTTPS]</size>
@@ -3513,5 +3513,62 @@ public class StructurizrPlantUMLDiagramExporterTests extends AbstractExporterTes
                     InternetBankingSystem.SinglePageApplication <-- InternetBankingSystem.APIApplication.SignInController <<Relationship-UmVsYXRpb25zaGlw>> : 6: Sends back an authentication token to\\n<size:16>[JSON/HTTPS]</size>
                                         
                     @enduml""", diagram.getDefinition());
+    }
+
+    @Test
+    public void dynamicView_SequenceStyle_ParticipantOrderFollowsStepOrder_NotModelCreationOrder() {
+        // Regression test: participants must appear left-to-right in the order they first appear
+        // as a *source* or *destination* in the dynamic steps (step 1, 2, 3 …), regardless of
+        // the order in which the model elements were created.
+        //
+        // Mirrors the BaaS Account Access Application diagram:
+        //   - The view is scoped to a Container (the BaaS system's domain container)
+        //   - saga and logic are Components inside the scoped Container (written first by writeElements)
+        //   - wla is an out-of-scope SoftwareSystem written afterwards via view.getElements() iteration
+        //   - wla is the initiator (step 1 source) but gets a high element ID because it is
+        //     created late in the model
+        //
+        // Bug: out-of-scope elements are written in raw view.getElements() order (sorted by
+        //      element ID, ascending), so wla — with its high numeric ID — appears after all
+        //      in-scope components, even though it is step 1.
+        //
+        // Fix: out-of-scope elements must also be emitted in dynamic-step-appearance order.
+        Workspace workspace = new Workspace("Name", "Description");
+        Model model = workspace.getModel();
+
+        // In-scope: BaaS system with a container and two components inside it
+        SoftwareSystem baasSys = model.addSoftwareSystem("BaaS");
+        Container baasContainer = baasSys.addContainer("BaaS Domain");
+        Component saga  = baasContainer.addComponent("Saga");
+        Component logic = baasContainer.addComponent("Logic");
+        saga.uses(logic, "process");
+
+        // Out-of-scope: wla is a SoftwareSystem created *after* baasSys (higher element ID)
+        SoftwareSystem wla = model.addSoftwareSystem("WLA");
+        wla.uses(saga, "submit");
+
+        // Scoped dynamic view — step 1: wla→saga (out-of-scope initiator first), step 2: saga→logic
+        DynamicView view = workspace.getViews().createDynamicView(baasContainer, "key", "Description");
+        view.add(wla, saga);   // step 1 — wla is the out-of-scope initiator
+        view.add(saga, logic); // step 2
+        view.addProperty(StructurizrPlantUMLExporter.PLANTUML_SEQUENCE_DIAGRAM_PROPERTY, "true");
+
+        StructurizrPlantUMLExporter exporter = new StructurizrPlantUMLExporter();
+        Diagram diagram = exporter.export(view);
+
+        String definition = diagram.getDefinition();
+
+        // WLA must appear before Saga, and Saga before Logic in the participant declarations
+        int wlaIdx   = definition.indexOf("participant \"WLA");
+        int sagaIdx  = definition.indexOf("participant \"Saga");
+        int logicIdx = definition.indexOf("participant \"Logic");
+
+        assertTrue(wlaIdx   >= 0, "WLA participant not found");
+        assertTrue(sagaIdx  >= 0, "Saga participant not found");
+        assertTrue(logicIdx >= 0, "Logic participant not found");
+        assertTrue(wlaIdx < sagaIdx,
+                "WLA should appear before Saga (step 1 source must be leftmost participant), but got wlaIdx=" + wlaIdx + " sagaIdx=" + sagaIdx + "\n\n" + definition);
+        assertTrue(sagaIdx < logicIdx,
+                "Saga should appear before Logic (step 2 source comes before its destination)");
     }
 }
