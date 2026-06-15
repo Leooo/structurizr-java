@@ -20,7 +20,16 @@ subprojects { proj ->
     }
 
     test {
-        useJUnitPlatform()
+        useJUnitPlatform {
+            excludeTags "IntegrationTest"
+        }
+    }
+
+    tasks.register("integrationTest", Test) {
+        useJUnitPlatform {
+            includeTags "IntegrationTest"
+        }
+        mustRunAfter check
     }
 
     compileJava.options.encoding = 'UTF-8'
@@ -45,14 +54,15 @@ subprojects { proj ->
 
     publishing {
         repositories {
-            maven {
-                name = "ossrh"
-                url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-                credentials {
-                    username = findProperty('ossrhUsername')
-                    password = findProperty('ossrhPassword')
-                }
-            }
+//            maven {
+//                name = "ossrh"
+//                url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+//                credentials {
+//                    username = findProperty('ossrhUsername')
+//                    password = findProperty('ossrhPassword')
+//                }
+//            }
+            mavenLocal()
         }
 
         publications {
@@ -89,8 +99,8 @@ subprojects { proj ->
         }
     }
 
-    signing {
-        sign publishing.publications.mavenJava
-    }
+//    signing {
+//        sign publishing.publications.mavenJava
+//    }
 
 }

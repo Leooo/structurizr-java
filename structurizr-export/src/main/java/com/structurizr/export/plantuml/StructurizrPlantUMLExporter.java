@@ -8,7 +8,6 @@ import com.structurizr.util.StringUtils;
 import com.structurizr.view.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 
@@ -16,21 +15,29 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
 
     public static final String PLANTUML_SHADOW = "plantuml.shadow";
 
-    private int groupId = 0;
+    private static final int DEFAULT_STROKE_WIDTH = 2;
+    private static final double METADATA_FONT_SIZE_RATIO = 0.7;
+    private static final int MAX_ICON_SIZE_RATIO = 3;
+
+    private Set<PlantUMLStyle> plantUMLStyles;
 
     public StructurizrPlantUMLExporter() {
-        addSkinParam("arrowFontSize", "10");
-        addSkinParam("defaultTextAlignment", "center");
-        addSkinParam("wrapWidth", "200");
-        addSkinParam("maxMessageSize", "100");
+        this(ColorScheme.Light);
+    }
+
+    public StructurizrPlantUMLExporter(ColorScheme colorScheme) {
+        super(colorScheme);
     }
 
     @Override
     protected void writeHeader(ModelView view, IndentingWriter writer) {
+        plantUMLStyles = new HashSet<>();
         super.writeHeader(view, writer);
-        groupId = 0;
+        if (renderAsTeozDiagram(view)) {
+            writer.writeLine("!pragma teoz true");
+        }
 
-        if (view instanceof DynamicView && renderAsSequenceDiagram(view)) {
+        if (renderAsSequenceDiagram(view)) {
             // do nothing
         } else {
             if (view.getAutomaticLayout() != null) {
@@ -51,163 +58,104 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             } else {
                 writer.writeLine("top to bottom direction");
             }
-
-            writer.writeLine();
         }
 
-        Font font = view.getViewSet().getConfiguration().getBranding().getFont();
-        if (font != null) {
-            String fontName = font.getName();
-            if (!StringUtils.isNullOrEmpty(fontName)) {
-                addSkinParam("defaultFontName", "\"" + fontName + "\"");
-            }
-        }
-
-        writeSkinParams(writer);
-        writeIncludes(view, writer);
-
-        writer.writeLine();
         writer.writeLine("hide stereotype");
         writer.writeLine();
 
-        List<Element> elements = view.getElements().stream().map(ElementView::getElement).sorted(Comparator.comparing(Element::getName)).collect(Collectors.toList());
-        for (Element element : elements) {
-            String id = idOf(element);
-
-            String type = plantUMLShapeOf(view, element);
-            if ("actor".equals(type)) {
-                type = "rectangle"; // the actor shape is not supported in this implementation
-            }
-
-            ElementStyle elementStyle = findElementStyle(view, element);
-
-            String background = elementStyle.getBackground();
-            String stroke = elementStyle.getStroke();
-            String color = elementStyle.getColor();
-            Shape shape = elementStyle.getShape();
-
-            if (view instanceof DynamicView && renderAsSequenceDiagram(view)) {
-                type = "sequenceParticipant";
-            }
-
-            writer.writeLine(format("skinparam %s<<%s>> {", type, id));
-            writer.indent();
-            if (element instanceof DeploymentNode) {
-                writer.writeLine("BackgroundColor #ffffff");
-            } else {
-                writer.writeLine(String.format("BackgroundColor %s", background));
-            }
-            writer.writeLine(String.format("FontColor %s", color));
-            writer.writeLine(String.format("BorderColor %s", stroke));
-
-            if (shape == Shape.RoundedBox) {
-                writer.writeLine("roundCorner 20");
-            }
-
-            boolean shadow = "true".equalsIgnoreCase(elementStyle.getProperties().getOrDefault(PLANTUML_SHADOW, "false"));
-            writer.writeLine(String.format("shadowing %s", shadow));
-
-            writer.outdent();
-            writer.writeLine("}");
-        }
-
-        if (!renderAsSequenceDiagram(view)) {
-            // boundaries
-            List<Element> boundaryElements = new ArrayList<>();
-            if (view instanceof ContainerView) {
-                boundaryElements.addAll(getBoundarySoftwareSystems(view));
-            } else if (view instanceof ComponentView) {
-                boundaryElements.addAll(getBoundaryContainers(view));
-            } else if (view instanceof DynamicView) {
-                DynamicView dynamicView = (DynamicView) view;
-                if (dynamicView.getElement() instanceof SoftwareSystem) {
-                    boundaryElements.addAll(getBoundarySoftwareSystems(view));
-                } else if (dynamicView.getElement() instanceof Container) {
-                    boundaryElements.addAll(getBoundaryContainers(view));
-                }
-            }
-
-            for (Element boundaryElement : boundaryElements) {
-                ElementStyle elementStyle = view.getViewSet().getConfiguration().getStyles().findElementStyle(boundaryElement);
-                String id = idOf(boundaryElement);
-                String color = elementStyle.getStroke();
-                boolean shadow = "true".equalsIgnoreCase(elementStyle.getProperties().getOrDefault(PLANTUML_SHADOW, "false"));
-
-                writer.writeLine(format("skinparam rectangle<<%s>> {", id));
-                writer.indent();
-                writer.writeLine(String.format("BorderColor %s", color));
-                writer.writeLine(String.format("FontColor %s", color));
-                writer.writeLine(String.format("shadowing %s", shadow));
-                writer.outdent();
-                writer.writeLine("}");
-            }
-        }
-
+        writer.writeLine("<style></style>");
         writer.writeLine();
+
+        String fontName = null;
+        Font font = view.getViewSet().getConfiguration().getBranding().getFont();
+        if (font != null) {
+            fontName = font.getName();
+            if (!StringUtils.isNullOrEmpty(fontName)) {
+                writer.writeLine("FontName: " + fontName);
+            }
+        }
+        if (colorScheme == ColorScheme.Dark) {
+            plantUMLStyles.add(new PlantUMLRootStyle(
+                    Styles.DEFAULT_BACKGROUND_DARK,
+                    Styles.DEFAULT_COLOR_DARK,
+                    fontName));
+        } else {
+            plantUMLStyles.add(new PlantUMLRootStyle(
+                    Styles.DEFAULT_BACKGROUND_LIGHT,
+                    Styles.DEFAULT_COLOR_LIGHT,
+                    fontName));
+        }
+
+        writeIncludes(view, writer);
     }
 
     @Override
-    protected void startEnterpriseBoundary(ModelView view, String enterpriseName, IndentingWriter writer) {
-        if (!renderAsSequenceDiagram(view)) {
-            writer.writeLine(String.format("rectangle \"%s\" <<enterprise>> {", enterpriseName));
-            writer.indent();
-            writer.writeLine("skinparam RectangleBorderColor<<enterprise>> #444444");
-            writer.writeLine("skinparam RectangleFontColor<<enterprise>> #444444");
-            writer.writeLine();
-        }
+    protected void writeFooter(ModelView view, IndentingWriter writer) {
+        super.writeFooter(view, writer);
+        writeStyles(writer);
     }
 
-    @Override
-    protected void endEnterpriseBoundary(ModelView view, IndentingWriter writer) {
-        if (!renderAsSequenceDiagram(view)) {
-            writer.outdent();
-            writer.writeLine("}");
-            writer.writeLine();
-        }
+    private void writeStyles(IndentingWriter writer) {
+        StringBuilder styles = new StringBuilder();
+        List<PlantUMLStyle> sortedStyles = plantUMLStyles.stream().sorted(Comparator.comparing(PlantUMLStyle::getName)).toList();
+
+        sortedStyles.stream().filter(style -> style instanceof PlantUMLRootStyle).forEach(style -> styles.append(style.toString()));
+        sortedStyles.stream().filter(style -> style instanceof PlantUMLElementStyle).forEach(style -> styles.append(style.toString()));
+        sortedStyles.stream().filter(style -> style instanceof PlantUMLRelationshipStyle).forEach(style -> styles.append(style.toString()));
+        sortedStyles.stream().filter(style -> style instanceof PlantUMLBoundaryStyle).forEach(style -> styles.append(style.toString()));
+        sortedStyles.stream().filter(style -> style instanceof PlantUMLGroupStyle).forEach(style -> styles.append(style.toString()));
+        sortedStyles.stream().filter(style -> style instanceof PlantUMLLegendStyle).forEach(style -> styles.append(style.toString()));
+
+        writer.replace("<style></style>", "<style>\n" + styles + "</style>");
     }
 
     @Override
     protected void startGroupBoundary(ModelView view, String group, IndentingWriter writer) {
-        groupId++;
         String groupName = group;
 
         String groupSeparator = view.getModel().getProperties().get(GROUP_SEPARATOR_PROPERTY_NAME);
         if (!StringUtils.isNullOrEmpty(groupSeparator)) {
             groupName = group.substring(group.lastIndexOf(groupSeparator) + groupSeparator.length());
         }
+        
+        ElementStyle elementStyle = findGroupStyle(view, group);
+        PlantUMLGroupStyle plantUMLBoundaryStyle = new PlantUMLGroupStyle(
+                group,
+                elementStyle.getBackground(),
+                elementStyle.getColor(),
+                elementStyle.getStroke(),
+                elementStyle.getStrokeWidth() != null ? elementStyle.getStrokeWidth() : DEFAULT_STROKE_WIDTH,
+                elementStyle.getBorder(),
+                elementStyle.getFontSize(),
+                "true".equalsIgnoreCase(elementStyle.getProperties().getOrDefault(PLANTUML_SHADOW, "false"))
+        );
+        plantUMLStyles.add(plantUMLBoundaryStyle);
 
         if (!renderAsSequenceDiagram(view)) {
-            String color = "#cccccc";
-            String icon = "";
-
-            ElementStyle elementStyleForGroup = view.getViewSet().getConfiguration().getStyles().findElementStyle("Group:" + group);
-            ElementStyle elementStyleForAllGroups = view.getViewSet().getConfiguration().getStyles().findElementStyle("Group");
-
-            if (elementStyleForGroup != null && !StringUtils.isNullOrEmpty(elementStyleForGroup.getColor())) {
-                color = elementStyleForGroup.getColor();
-            } else if (elementStyleForAllGroups != null && !StringUtils.isNullOrEmpty(elementStyleForAllGroups.getColor())) {
-                color = elementStyleForAllGroups.getColor();
-            }
-
-            if (elementStyleForGroup != null && elementStyleHasSupportedIcon(elementStyleForGroup)) {
-                icon = elementStyleForGroup.getIcon();
-            } else if (elementStyleForAllGroups != null && elementStyleHasSupportedIcon(elementStyleForAllGroups)) {
-                icon = elementStyleForAllGroups.getColor();
-            }
-
+            String icon = elementStyle.getIcon();
             if (!StringUtils.isNullOrEmpty(icon)) {
-                double scale = calculateIconScale(icon);
+                double scale = calculateIconScale(icon, elementStyle.getFontSize() * MAX_ICON_SIZE_RATIO);
                 icon = "\\n\\n<img:" + icon + "{scale=" + scale + "}>";
+            } else {
+                icon = "";
             }
 
-            writer.writeLine(String.format("rectangle \"%s%s\" <<group%s>> as group%s {", groupName, icon, groupId, groupId));
+            writer.writeLine(
+                    String.format(
+                            "rectangle \"%s%s\" <<%s>> as group%s {",
+                            groupName,
+                            icon,
+                            classSelectorForGroup(group),
+                            Base64.getEncoder().encodeToString(group.getBytes()))
+            );
             writer.indent();
-            writer.writeLine(String.format("skinparam RectangleBorderColor<<group%s>> %s", groupId, color));
-            writer.writeLine(String.format("skinparam RectangleFontColor<<group%s>> %s", groupId, color));
-            writer.writeLine(String.format("skinparam RectangleBorderStyle<<group%s>> dashed", groupId));
-
-            writer.writeLine();
+        } else {
+            writer.writeLine(String.format("box \"%s\" <<%s>>", groupName, classSelectorForGroup(group)));
+            writer.indent();
+            writer.writeLine("box");
+            writer.indent();
         }
+        writer.writeLine();
     }
 
     @Override
@@ -216,13 +164,52 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             writer.outdent();
             writer.writeLine("}");
             writer.writeLine();
+        } else {
+            writer.outdent();
+            writer.writeLine("end box");
+            writer.outdent();
+            writer.writeLine("end box");
+            writer.writeLine();
+            
+            
         }
     }
 
     @Override
     protected void startSoftwareSystemBoundary(ModelView view, SoftwareSystem softwareSystem, IndentingWriter writer) {
+        ElementStyle elementStyle = findBoundaryStyle(view, softwareSystem);
+        PlantUMLBoundaryStyle plantUMLBoundaryStyle = new PlantUMLBoundaryStyle(
+                softwareSystem.getName(),
+                elementStyle.getBackground(),
+                elementStyle.getColor(),
+                elementStyle.getStroke(),
+                elementStyle.getStrokeWidth() != null ? elementStyle.getStrokeWidth() : DEFAULT_STROKE_WIDTH,
+                elementStyle.getBorder(),
+                elementStyle.getFontSize(),
+                "true".equalsIgnoreCase(elementStyle.getProperties().getOrDefault(PLANTUML_SHADOW, "false"))
+        );
+        plantUMLStyles.add(plantUMLBoundaryStyle);
         if (!renderAsSequenceDiagram(view)) {
-            writer.writeLine(String.format("rectangle \"%s\\n<size:10>%s</size>\" <<%s>> {", softwareSystem.getName(), typeOf(view, softwareSystem, true), idOf(softwareSystem)));
+            writer.writeLine(
+                    String.format(
+                            "rectangle \"%s\\n<size:%s>%s</size>\" <<%s>> {",
+                            softwareSystem.getName(),
+                            calculateMetadataFontSize(elementStyle.getFontSize()),
+                            typeOf(view, softwareSystem, true),
+                            plantUMLBoundaryStyle.getClassSelector()
+                    )
+            );
+            writer.indent();
+        } else {
+            writer.writeLine(
+                    String.format("box \"%s\\n%s\" <<%s>>",
+                            softwareSystem.getName(),
+                            typeOf(view, softwareSystem, true),
+                            plantUMLBoundaryStyle.getClassSelector()
+                    )
+            );
+            writer.indent();
+            writer.writeLine("box");
             writer.indent();
         }
     }
@@ -233,13 +220,47 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             writer.outdent();
             writer.writeLine("}");
             writer.writeLine();
+        } else {
+            writer.outdent();
+            writer.writeLine("end box");
+            writer.outdent();
+            writer.writeLine("end box");
+            writer.writeLine();
         }
     }
 
     @Override
     protected void startContainerBoundary(ModelView view, Container container, IndentingWriter writer) {
+        ElementStyle elementStyle = findBoundaryStyle(view, container);
+        PlantUMLBoundaryStyle plantUMLBoundaryStyle = new PlantUMLBoundaryStyle(
+                container.getName(),
+                elementStyle.getBackground(),
+                elementStyle.getColor(),
+                elementStyle.getStroke(),
+                elementStyle.getStrokeWidth() != null ? elementStyle.getStrokeWidth() : DEFAULT_STROKE_WIDTH,
+                elementStyle.getBorder(),
+                elementStyle.getFontSize(),
+                "true".equalsIgnoreCase(elementStyle.getProperties().getOrDefault(PLANTUML_SHADOW, "false"))
+        );
+        plantUMLStyles.add(plantUMLBoundaryStyle);
         if (!renderAsSequenceDiagram(view)) {
-            writer.writeLine(String.format("rectangle \"%s\\n<size:10>%s</size>\" <<%s>> {", container.getName(), typeOf(view, container, true), idOf(container)));
+            writer.writeLine(
+                    String.format(
+                            "rectangle \"%s\\n<size:%s>%s</size>\" <<%s>> {",
+                            container.getName(),
+                            calculateMetadataFontSize(findBoundaryStyle(view, container).getFontSize()),                            typeOf(view, container, true),
+                            plantUMLBoundaryStyle.getClassSelector()));
+            writer.indent();
+        } else {
+            writer.writeLine(
+                    String.format("box \"%s\\n%s\" <<%s>>",
+                            container.getName(),
+                            typeOf(view, container, true),
+                            plantUMLBoundaryStyle.getClassSelector()
+                    )
+            );
+            writer.indent();
+            writer.writeLine("box");
             writer.indent();
         }
     }
@@ -250,6 +271,12 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             writer.outdent();
             writer.writeLine("}");
             writer.writeLine();
+        } else {
+            writer.outdent();
+            writer.writeLine("end box");
+            writer.outdent();
+            writer.writeLine("end box");
+            writer.writeLine();
         }
     }
 
@@ -257,9 +284,24 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
     protected void startDeploymentNodeBoundary(DeploymentView view, DeploymentNode deploymentNode, IndentingWriter writer) {
         ElementStyle elementStyle = findElementStyle(view, deploymentNode);
 
+        PlantUMLElementStyle plantUMLElementStyle = new PlantUMLElementStyle(
+                elementStyle.getTag(),
+                elementStyle.getShape(),
+                elementStyle.getWidth(),
+                elementStyle.getBackground(),
+                elementStyle.getColor(),
+                elementStyle.getStroke(),
+                elementStyle.getStrokeWidth() != null ? elementStyle.getStrokeWidth() : DEFAULT_STROKE_WIDTH,
+                elementStyle.getBorder(),
+                elementStyle.getFontSize(),
+                elementStyle.getIcon(),
+                "true".equalsIgnoreCase(elementStyle.getProperties().getOrDefault(PLANTUML_SHADOW, "false"))
+        );
+        plantUMLStyles.add(plantUMLElementStyle);
+
         String icon = "";
-        if (elementStyleHasSupportedIcon(elementStyle)) {
-            double scale = calculateIconScale(elementStyle.getIcon());
+        if (isSupportedIcon(elementStyle.getIcon())) {
+            double scale = calculateIconScale(elementStyle.getIcon(), elementStyle.getFontSize() * MAX_ICON_SIZE_RATIO);
             icon = "\\n\\n<img:" + elementStyle.getIcon() + "{scale=" + scale + "}>";
         }
 
@@ -271,11 +313,13 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
         }
 
         writer.writeLine(
-                format("rectangle \"%s\\n<size:10>%s</size>%s\" <<%s>> as %s%s {",
+                format(
+                        "rectangle \"%s\\n<size:%s>%s</size>%s\" <<%s>> as %s%s {",
                         deploymentNode.getName() + (!"1".equals(deploymentNode.getInstances()) ? " (x" + deploymentNode.getInstances() + ")" : ""),
+                        calculateMetadataFontSize(findBoundaryStyle(view, deploymentNode).getFontSize()),
                         typeOf(view, deploymentNode, true),
                         icon,
-                        idOf(deploymentNode),
+                        classSelectorFor(elementStyle),
                         idOf(deploymentNode),
                         url
                 )
@@ -296,46 +340,160 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
 
     @Override
     public Diagram export(DynamicView view) {
-        if (renderAsSequenceDiagram(view)) {
-            IndentingWriter writer = new IndentingWriter();
-            writeHeader(view, writer);
-
-            Set<Element> elements = new LinkedHashSet<>();
-            for (RelationshipView relationshipView : view.getRelationships()) {
-                elements.add(relationshipView.getRelationship().getSource());
-                elements.add(relationshipView.getRelationship().getDestination());
+            Diagram diagram = super.export(view);
+            if (renderAsSequenceDiagram(view)) {
+                diagram.setLegend(createLegend(view));
             }
+            return diagram;
+    }
 
-            for (Element element : elements) {
-                writeElement(view, element, writer);
-            }
+    @Override
+    public Diagram export(DynamicView view, String order) {
+        if (!renderAsSequenceDiagram(view)) {
+            return super.export(view, order);
+        }
 
+        // Sequence diagram: out-of-scope elements (e.g. a frontend app) must be written in
+        // dynamic-step-appearance order relative to the in-scope boundary blocks.
+        // The base class writes all boundary boxes first and all out-of-scope elements last,
+        // which puts a step-1 initiator on the far right of the diagram.
+        // We fix this by splitting out-of-scope elements into two groups:
+        //   "before" — first appear before any in-scope element in the step sequence
+        //   "after"  — first appear after at least one in-scope element
+        // and writing: before-elements, then boundary boxes, then after-elements.
+        this.frame = order;
+        IndentingWriter writer = new IndentingWriter();
+        writeHeader(view, writer);
+
+        Map<String, Integer> firstAppearanceOrder = getFirstAppearanceOrder(view);
+
+        Element scopeElement = view.getElement();
+        if (scopeElement == null) {
+            // No scope — delegate entirely to base class behaviour
+            List<GroupableElement> elements = getGroupableElements(view, null);
+            writeElements(view, elements, writer);
+            if (!elements.isEmpty()) writer.writeLine();
             writeRelationships(view, writer);
             writeFooter(view, writer);
-
             return createDiagram(view, writer.toString());
-        } else {
-            return super.export(view);
         }
+
+        // Determine the first-appearance index of any in-scope element
+        int firstInScopeIndex = Integer.MAX_VALUE;
+        for (ElementView ev : view.getElements()) {
+            Element el = ev.getElement();
+            boolean inScope = (scopeElement instanceof Container && el.getParent() instanceof Container)
+                    || (scopeElement instanceof SoftwareSystem && el.getParent() != null && !(el.getParent() instanceof Container));
+            if (inScope) {
+                int idx = firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE);
+                if (idx < firstInScopeIndex) firstInScopeIndex = idx;
+            }
+        }
+
+        // Collect out-of-scope elements sorted by step appearance
+        List<ElementView> outOfScope = new ArrayList<>();
+        for (ElementView ev : view.getElements()) {
+            Element el = ev.getElement();
+            boolean inScope = (scopeElement instanceof Container && el.getParent() instanceof Container)
+                    || (scopeElement instanceof SoftwareSystem && el.getParent() != null && !(el.getParent() instanceof Container));
+            if (!inScope) outOfScope.add(ev);
+        }
+        outOfScope.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+
+        // Write out-of-scope elements that appear before any in-scope element
+        boolean wrotePrelude = false;
+        for (ElementView ev : outOfScope) {
+            int idx = firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE);
+            if (idx < firstInScopeIndex) {
+                writeElement(view, ev.getElement(), writer);
+                wrotePrelude = true;
+            }
+        }
+
+        // Write in-scope boundary blocks (unchanged base-class logic)
+        if (scopeElement instanceof SoftwareSystem) {
+            List<SoftwareSystem> softwareSystems = getBoundarySoftwareSystems(view);
+            for (SoftwareSystem softwareSystem : softwareSystems) {
+                startSoftwareSystemBoundary(view, softwareSystem, writer);
+                List<GroupableElement> scopedElements = getGroupableElements(view, softwareSystem);
+                writeElements(view, scopedElements, writer);
+                endSoftwareSystemBoundary(view, writer);
+            }
+        } else if (scopeElement instanceof Container) {
+            boolean includeSoftwareSystemBoundaries = "true".equalsIgnoreCase(getViewOrViewSetProperty(view, "structurizr.softwareSystemBoundaries", "false"));
+            List<Container> containers = getBoundaryContainers(view);
+            Set<SoftwareSystem> softwareSystems = containers.stream().map(Container::getSoftwareSystem).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            for (SoftwareSystem softwareSystem : softwareSystems) {
+                if (includeSoftwareSystemBoundaries) {
+                    startSoftwareSystemBoundary(view, softwareSystem, writer);
+                    writer.indent();
+                }
+                for (Container container : containers) {
+                    if (container.getSoftwareSystem() == softwareSystem) {
+                        startContainerBoundary(view, container, writer);
+                        List<GroupableElement> scopedElements = getGroupableElements(view, container);
+                        writeElements(view, scopedElements, writer);
+                        endContainerBoundary(view, writer);
+                    }
+                }
+                if (includeSoftwareSystemBoundaries) {
+                    endSoftwareSystemBoundary(view, writer);
+                    writer.outdent();
+                }
+            }
+        }
+
+        // Write out-of-scope elements that appear after the first in-scope element
+        boolean wrotePostlude = false;
+        for (ElementView ev : outOfScope) {
+            int idx = firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE);
+            if (idx >= firstInScopeIndex) {
+                writeElement(view, ev.getElement(), writer);
+                wrotePostlude = true;
+            }
+        }
+
+        if (wrotePrelude || wrotePostlude) {
+            writer.writeLine();
+        }
+
+        writeRelationships(view, writer);
+        writeFooter(view, writer);
+
+        return createDiagram(view, writer.toString());
     }
 
     @Override
     protected void writeElement(ModelView view, Element element, IndentingWriter writer) {
         ElementStyle elementStyle = findElementStyle(view, element);
+        PlantUMLElementStyle plantUMLElementStyle = new PlantUMLElementStyle(
+                elementStyle.getTag(),
+                elementStyle.getShape(),
+                elementStyle.getWidth(),
+                elementStyle.getBackground(),
+                elementStyle.getColor(),
+                elementStyle.getStroke(),
+                renderAsSequenceDiagram(view) ? DEFAULT_STROKE_WIDTH : elementStyle.getStrokeWidth() != null ? elementStyle.getStrokeWidth() : DEFAULT_STROKE_WIDTH,
+                elementStyle.getBorder(),
+                elementStyle.getFontSize(),
+                elementStyle.getIcon(),
+                "true".equalsIgnoreCase(elementStyle.getProperties().getOrDefault(PLANTUML_SHADOW, "false"))
+        );
+        plantUMLStyles.add(plantUMLElementStyle);
 
-        if (view instanceof DynamicView && renderAsSequenceDiagram(view)) {
-            writer.writeLine(String.format("%s \"%s\\n<size:10>%s</size>\" as %s <<%s>> %s",
+        int metadataFontSize = calculateMetadataFontSize(elementStyle.getFontSize());
+
+        if (renderAsSequenceDiagram(view)) {
+            writer.writeLine(String.format("%s \"%s\\n<size:%s>%s</size>\" as %s <<%s>> %s",
                     plantumlSequenceType(view, element),
                     element.getName(),
+                    metadataFontSize,
                     typeOf(view, element, true),
                     idOf(element),
-                    idOf(element),
+                    plantUMLElementStyle.getClassSelector(),
                     elementStyle.getBackground()));
         } else {
             String shape = plantUMLShapeOf(view, element);
-            if ("actor".equals(shape)) {
-                shape = "rectangle";
-            }
             String name = element.getName();
             String description = element.getDescription();
             String type = typeOf(view, element, true);
@@ -370,23 +528,24 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
             if (StringUtils.isNullOrEmpty(type) || false == elementStyle.getMetadata()) {
                 type = "";
             } else {
-                type = String.format("\\n<size:10>%s</size>", type);
+                type = String.format("\\n<size:%s>%s</size>", metadataFontSize, type);
             }
 
-            if (elementStyleHasSupportedIcon(elementStyle)) {
-                double scale = calculateIconScale(elementStyle.getIcon());
+            if (isSupportedIcon(elementStyle.getIcon())) {
+                double scale = calculateIconScale(elementStyle.getIcon(), elementStyle.getFontSize() * MAX_ICON_SIZE_RATIO);
                 icon = "\\n\\n<img:" + elementStyle.getIcon() + "{scale=" + scale + "}>";
             }
 
+            String classSelector = plantUMLElementStyle.getClassSelector();
             String id = idOf(element);
 
             writer.writeLine(format("%s \"==%s%s%s%s\" <<%s>> as %s%s",
                     shape,
                     name,
                     type,
-                    description,
                     icon,
-                    id,
+                    description,
+                    classSelector,
                     id,
                     url)
             );
@@ -402,20 +561,26 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
         Relationship relationship = relationshipView.getRelationship();
         RelationshipStyle style = findRelationshipStyle(view, relationship);
 
+        PlantUMLRelationshipStyle plantUMLRelationshipStyle = new PlantUMLRelationshipStyle(
+                style.getTag(),
+                style.getColor(),
+                style.getStyle(),
+                renderAsSequenceDiagram(view) ? DEFAULT_STROKE_WIDTH : style.getThickness(),
+                style.getFontSize()
+        );
+        plantUMLStyles.add(plantUMLRelationshipStyle);
+
+        int metadataFontSize = calculateMetadataFontSize(style.getFontSize());
         String description = "";
         String technology = relationship.getTechnology();
 
-        if (view instanceof DynamicView && renderAsSequenceDiagram(view)) {
-            // do nothing - sequence diagrams don't need the order
-        } else {
-            if (!StringUtils.isNullOrEmpty(relationshipView.getOrder())) {
-                description = relationshipView.getOrder() + ". ";
-            }
+        if (!StringUtils.isNullOrEmpty(relationshipView.getOrder())) {
+            description = relationshipView.getOrder() + ": ";
         }
 
         description += (hasValue(relationshipView.getDescription()) ? relationshipView.getDescription() : hasValue(relationshipView.getRelationship().getDescription()) ? relationshipView.getRelationship().getDescription() : "");
 
-        if (view instanceof DynamicView && renderAsSequenceDiagram(view)) {
+        if (renderAsSequenceDiagram(view)) {
             String arrowStart = "-";
             String arrowEnd = ">";
 
@@ -423,48 +588,32 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
                 arrowStart = "<-";
                 arrowEnd = "-";
             }
-
             writer.writeLine(
-                    String.format("%s %s[%s]%s %s : %s",
+                    String.format("%s %s%s %s <<%s>> : %s%s",
                             idOf(relationship.getSource()),
                             arrowStart,
-                            style.getColor(),
                             arrowEnd,
                             idOf(relationship.getDestination()),
-                            description));
+                            plantUMLRelationshipStyle.getClassSelector(),
+                            description,
+                            (StringUtils.isNullOrEmpty(technology) ? "" : "\\n<size:" + metadataFontSize + ">[" + technology + "]</size>")));
         } else {
-            boolean solid = style.getStyle() == LineStyle.Solid || false == style.getDashed();
-
-            String arrowStart;
-            String arrowEnd;
-            String relationshipStyle = style.getColor();
-
-            if (style.getThickness() != null) {
-                relationshipStyle += ",thickness=" + style.getThickness();
-            }
+            String arrow;
 
             if (relationshipView.isResponse() != null && relationshipView.isResponse()) {
-                arrowStart = solid ? "<-" : "<.";
-                arrowEnd = solid ? "-" : ".";
+                arrow = "<--";
             } else {
-                arrowStart = solid ? "-" : ".";
-                arrowEnd = solid ? "->" : ".>";
+                arrow = "-->";
             }
 
-            if (!isVisible(view, relationshipView)) {
-                relationshipStyle = "hidden";
-            }
-
-            // 1 .[#rrggbb,thickness=n].> 2 : "...\n<size:8>...</size>
-            writer.writeLine(format("%s %s[%s]%s %s : \"<color:%s>%s%s\"",
+            // 1 --> 2 : "...\n<size:..>...</size>
+            writer.writeLine(format("%s %s %s <<%s>> : \"%s%s\"",
                     idOf(relationship.getSource()),
-                    arrowStart,
-                    relationshipStyle,
-                    arrowEnd,
+                    arrow,
                     idOf(relationship.getDestination()),
-                    style.getColor(),
+                    plantUMLRelationshipStyle.getClassSelector(),
                     description,
-                    (StringUtils.isNullOrEmpty(technology) ? "" : "\\n<color:" + style.getColor() + "><size:8>[" + technology + "]</size>")
+                    (StringUtils.isNullOrEmpty(technology) ? "" : "\\n<size:" + metadataFontSize + ">[" + technology + "]</size>")
             ));
         }
     }
@@ -472,155 +621,65 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
     @Override
     protected Legend createLegend(ModelView view) {
         IndentingWriter writer = new IndentingWriter();
-        int id = 0;
 
         writer.writeLine("@startuml");
-        writer.writeLine("set separator none");
         writer.writeLine();
-
-        writer.writeLine("skinparam {");
-        writer.indent();
-        writer.writeLine("shadowing false");
-        writer.writeLine("arrowFontSize 15");
-        writer.writeLine("defaultTextAlignment center");
-        writer.writeLine("wrapWidth 100");
-        writer.writeLine("maxMessageSize 100");
-        Font font = view.getViewSet().getConfiguration().getBranding().getFont();
-        if (font != null) {
-            String fontName = font.getName();
-            if (!StringUtils.isNullOrEmpty(fontName)) {
-                writer.writeLine("defaultFontName \"" + fontName + "\"");
-            }
-        }
-        writer.outdent();
-        writer.writeLine("}");
-
+        writer.writeLine("set separator none");
         writer.writeLine("hide stereotype");
         writer.writeLine();
 
-        writer.writeLine("skinparam rectangle<<_transparent>> {");
-        writer.indent();
-        writer.writeLine("BorderColor transparent");
-        writer.writeLine("BackgroundColor transparent");
-        writer.writeLine("FontColor transparent");
-        writer.outdent();
-        writer.writeLine("}");
+        writer.writeLine("<style></style>");
         writer.writeLine();
 
-        Map<String,ElementStyle> elementStyles = new HashMap<>();
-        List<Element> elements = view.getElements().stream().map(ElementView::getElement).collect(Collectors.toList());
-        for (Element element : elements) {
-            ElementStyle elementStyle = findElementStyle(view, element);
-
-            if (element instanceof DeploymentNode) {
-                // deployment node backgrounds are always white
-                elementStyle.setBackground("#ffffff");
-            }
-
-            if (!StringUtils.isNullOrEmpty(elementStyle.getTag()) ) {
-                elementStyles.put(elementStyle.getTag(), elementStyle);
-            };
-        }
-
-        List<ElementStyle> sortedElementStyles = elementStyles.values().stream().sorted(Comparator.comparing(ElementStyle::getTag)).collect(Collectors.toList());;
-        for (ElementStyle elementStyle : sortedElementStyles) {
-            id++;
-            Shape shape = elementStyle.getShape();
-            String type = plantUMLShapeOf(elementStyle.getShape());
-            if ("actor".equals(type)) {
-                type = "rectangle"; // the actor shape is not supported in this implementation
-            }
-
-            String background = elementStyle.getBackground();
-            String stroke = elementStyle.getStroke();
-            String color = elementStyle.getColor();
-
-            if (view instanceof DynamicView && renderAsSequenceDiagram(view)) {
-                type = "sequenceParticipant";
-            }
-
-            writer.writeLine(format("skinparam %s<<%s>> {", type, id));
-            writer.indent();
-            writer.writeLine(String.format("BackgroundColor %s", background));
-            writer.writeLine(String.format("FontColor %s", color));
-            writer.writeLine(String.format("BorderColor %s", stroke));
-
-            if (shape == Shape.RoundedBox) {
-                writer.writeLine("roundCorner 20");
-            }
-            writer.outdent();
-            writer.writeLine("}");
-
-            String description = elementStyle.getTag();
+        plantUMLStyles.stream().sorted(Comparator.comparing(PlantUMLStyle::getName)).filter(style -> style instanceof PlantUMLElementStyle).map(style -> (PlantUMLElementStyle)style).forEach(style -> {
+            style.setWidth(200);
+            String description = style.getName();
             if (description.startsWith("Element,")) {
                 description = description.substring("Element,".length());
             }
             description = description.replaceAll(",", ", ");
 
             String icon = "";
-            if (elementStyleHasSupportedIcon(elementStyle)) {
-                double scale = calculateIconScale(elementStyle.getIcon());
-                icon = "\\n\\n<img:" + elementStyle.getIcon() + "{scale=" + scale + "}>";
+            if (isSupportedIcon(style.getIcon())) {
+                double scale = calculateIconScale(style.getIcon(), style.getFontSize() * MAX_ICON_SIZE_RATIO);
+                icon = "\\n\\n<img:" + style.getIcon() + "{scale=" + scale + "}>";
             }
 
             writer.writeLine(format("%s \"==%s%s\" <<%s>>",
-                    type,
+                    plantUMLShapeOf(style.getShape()),
                     description,
                     icon,
-                    id)
+                    style.getClassSelector())
             );
             writer.writeLine();
-        }
+        });
 
-        Map<String,RelationshipStyle> relationshipStyles = new HashMap<>();
-        List<Relationship> relationships = view.getRelationships().stream().map(RelationshipView::getRelationship).collect(Collectors.toList());
-        for (Relationship relationship : relationships) {
-            RelationshipStyle relationshipStyle = findRelationshipStyle(view, relationship);
-
-            if (!StringUtils.isNullOrEmpty(relationshipStyle.getTag())) {
-                relationshipStyles.put(relationshipStyle.getTag(), relationshipStyle);
-            }
-        }
-
-        List<RelationshipStyle> sortedRelationshipStyles = relationshipStyles.values().stream().sorted(Comparator.comparing(RelationshipStyle::getTag)).collect(Collectors.toList());;
-        for (RelationshipStyle relationshipStyle : sortedRelationshipStyles) {
+        int id = 0;
+        List<PlantUMLRelationshipStyle> relationshipStyles = plantUMLStyles.stream().sorted(Comparator.comparing(PlantUMLStyle::getName)).filter(style -> style instanceof PlantUMLRelationshipStyle).map(style -> (PlantUMLRelationshipStyle)style).toList();
+        for (PlantUMLRelationshipStyle relationshipStyle : relationshipStyles) {
             id++;
-
-            String description = relationshipStyle.getTag();
+            String description = relationshipStyle.getName();
             if (description.startsWith("Relationship,")) {
                 description = description.substring("Relationship,".length());
             }
             description = description.replaceAll(",", ", ");
 
-            writer.writeLine(format("rectangle \".\" <<_transparent>> as %s", id));
-
-            boolean solid = relationshipStyle.getStyle() == LineStyle.Solid || false == relationshipStyle.getDashed();
-
-            String arrowStart = solid ? "-" : ".";
-            String arrowEnd = solid ? "->" : ".>";
-            String buf = relationshipStyle.getColor();
-
-            if (relationshipStyle.getThickness() != null) {
-                buf += ",thickness=" + relationshipStyle.getThickness();
-            }
-
-            // 1 .[#rrggbb,thickness=n].> 2 : "..."
-            writer.writeLine(format("%s %s[%s]%s %s : \"<color:%s>%s\"",
+            // id --> id : "..."
+            writer.writeLine(format("rectangle \".\" <<.Element-Transparent>> as %s", id));
+            writer.writeLine(format("%s --> %s <<%s>> : \"%s\"",
                     id,
-                    arrowStart,
-                    buf,
-                    arrowEnd,
                     id,
-                    relationshipStyle.getColor(),
+                    relationshipStyle.getClassSelector(),
                     description)
             );
 
             writer.writeLine();
-        }
-
-        writer.writeLine();
+        };
 
         writer.writeLine("@enduml");
+
+        plantUMLStyles.add(new PlantUMLLegendStyle());
+        writeStyles(writer);
 
         return new Legend(writer.toString());
     }
@@ -628,5 +687,107 @@ public class StructurizrPlantUMLExporter extends AbstractPlantUMLExporter {
     protected boolean renderAsSequenceDiagram(ModelView view) {
         return view instanceof DynamicView && "true".equalsIgnoreCase(getViewOrViewSetProperty(view, PLANTUML_SEQUENCE_DIAGRAM_PROPERTY, "false"));
     }
+        
+    protected boolean renderAsTeozDiagram(ModelView view) {
+        return view instanceof DynamicView && "true".equalsIgnoreCase(getViewOrViewSetProperty(view, PLANTUML_TEOZ_PROPERTY, "false"));
+    }
+    
+    private String classSelectorFor(ElementStyle elementStyle) {
+        return "Element-" + Base64.getEncoder().encodeToString(elementStyle.getTag().getBytes());
+    }
+
+    private String classSelectorForBoundary(Element element) {
+        return "Boundary-" + Base64.getEncoder().encodeToString(element.getName().getBytes());
+    }
+
+    private ElementStyle findBoundaryStyle(ModelView view, Element element) {
+        return findElementStyle(view, element);
+    }
+
+    private String classSelectorForGroup(String group) {
+        return "Group-" + Base64.getEncoder().encodeToString(group.getBytes());
+    }
+
+    private ElementStyle findGroupStyle(ModelView view, String group) {
+        String background = colorScheme == ColorScheme.Dark ? Styles.DEFAULT_BACKGROUND_DARK : Styles.DEFAULT_BACKGROUND_LIGHT;
+        String stroke = colorScheme == ColorScheme.Dark ? Styles.DEFAULT_COLOR_DARK : Styles.DEFAULT_COLOR_LIGHT;
+        int strokeWidth = DEFAULT_STROKE_WIDTH;
+        Border border = Border.Dotted;
+        String color = colorScheme == ColorScheme.Dark ? Styles.DEFAULT_COLOR_DARK : Styles.DEFAULT_COLOR_LIGHT;
+        String icon = "";
+        int fontSize = DEFAULT_FONT_SIZE;
+
+        ElementStyle style = new ElementStyle("");
+        ElementStyle elementStyleForGroup = findElementStyle(view, "Group:" + group);
+        ElementStyle elementStyleForAllGroups = findElementStyle(view, "Group");
+
+        if (elementStyleForGroup != null && !StringUtils.isNullOrEmpty(elementStyleForGroup.getBackground())) {
+            background = elementStyleForGroup.getBackground();
+        } else if (elementStyleForAllGroups != null && !StringUtils.isNullOrEmpty(elementStyleForAllGroups.getBackground())) {
+            background = elementStyleForAllGroups.getBackground();
+        }
+        style.setBackground(background);
+
+        if (elementStyleForGroup != null && !StringUtils.isNullOrEmpty(elementStyleForGroup.getStroke())) {
+            stroke = elementStyleForGroup.getStroke();
+        } else if (elementStyleForAllGroups != null && !StringUtils.isNullOrEmpty(elementStyleForAllGroups.getStroke())) {
+            stroke = elementStyleForAllGroups.getStroke();
+        }
+        style.setStroke(stroke);
+
+        if (elementStyleForGroup != null && elementStyleForGroup.getStrokeWidth() != null) {
+            strokeWidth = elementStyleForGroup.getStrokeWidth();
+        } else if (elementStyleForAllGroups != null && elementStyleForAllGroups.getStrokeWidth() != null) {
+            strokeWidth = elementStyleForAllGroups.getStrokeWidth();
+        }
+        style.setStrokeWidth(strokeWidth);
+
+        if (elementStyleForGroup != null && !StringUtils.isNullOrEmpty(elementStyleForGroup.getColor())) {
+            color = elementStyleForGroup.getColor();
+        } else if (elementStyleForAllGroups != null && !StringUtils.isNullOrEmpty(elementStyleForAllGroups.getColor())) {
+            color = elementStyleForAllGroups.getColor();
+        }
+        style.setColor(color);
+
+        if (elementStyleForGroup != null && elementStyleForGroup.getBorder() != null) {
+            border = elementStyleForGroup.getBorder();
+        } else if (elementStyleForAllGroups != null && elementStyleForAllGroups.getBorder() != null) {
+            border = elementStyleForAllGroups.getBorder();
+        }
+        style.setBorder(border);
+
+        if (elementStyleForGroup != null && isSupportedIcon(elementStyleForGroup.getIcon())) {
+            icon = elementStyleForGroup.getIcon();
+        } else if (elementStyleForAllGroups != null && isSupportedIcon(elementStyleForAllGroups.getIcon())) {
+            icon = elementStyleForAllGroups.getColor();
+        }
+        style.setIcon(icon);
+
+        if (elementStyleForGroup != null && elementStyleForGroup.getFontSize() != null) {
+            fontSize = elementStyleForGroup.getFontSize();
+        } else if (elementStyleForAllGroups != null && elementStyleForAllGroups.getFontSize() != null) {
+            fontSize = elementStyleForAllGroups.getFontSize();
+        }
+        style.setFontSize(fontSize);
+
+        return style;
+    }
+
+    private int calculateMetadataFontSize(int fontSize) {
+        return (int)Math.floor(fontSize * METADATA_FONT_SIZE_RATIO);
+    }
+
+    private String toLineStyle(ElementStyle elementStyle) {
+        int strokeWidth = elementStyle.getStrokeWidth() != null ? elementStyle.getStrokeWidth() : DEFAULT_STROKE_WIDTH;
+        switch (elementStyle.getBorder()) {
+            case Dotted:
+                return (strokeWidth * 1) + "-" + (strokeWidth * 1);
+            case Dashed:
+                return (strokeWidth * 5) + "-" + (strokeWidth * 5);
+            default:
+                return "0";
+        }
+    }
 
 }
+

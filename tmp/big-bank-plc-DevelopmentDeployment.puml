@@ -1,0 +1,119 @@
+@startuml
+title <size:24>Deployment View: Internet Banking System - Development</size>\n<size:24>An example development deployment scenario for the Internet Banking System.</size>
+
+set separator none
+top to bottom direction
+skinparam ranksep 60
+skinparam nodesep 30
+hide stereotype
+
+<style>
+  root {
+    BackgroundColor: #ffffff;
+    FontColor: #444444;
+  }
+  // Element
+  .Element-RWxlbWVudA== {
+    BackgroundColor: #ffffff;
+    LineColor: #444444;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #444444;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Container
+  .Element-RWxlbWVudCxDb250YWluZXI= {
+    BackgroundColor: #438dd5;
+    LineColor: #2e6295;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #ffffff;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Container,Database
+  .Element-RWxlbWVudCxDb250YWluZXIsRGF0YWJhc2U= {
+    BackgroundColor: #438dd5;
+    LineColor: #2e6295;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #ffffff;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Container,Web Browser
+  .Element-RWxlbWVudCxDb250YWluZXIsV2ViIEJyb3dzZXI= {
+    BackgroundColor: #438dd5;
+    LineColor: #2e6295;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #ffffff;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Element,Software System,Existing System
+  .Element-RWxlbWVudCxTb2Z0d2FyZSBTeXN0ZW0sRXhpc3RpbmcgU3lzdGVt {
+    BackgroundColor: #999999;
+    LineColor: #6b6b6b;
+    LineStyle: 0;
+    LineThickness: 2;
+    FontColor: #ffffff;
+    FontSize: 24;
+    HorizontalAlignment: center;
+    Shadowing: 0;
+    MaximumWidth: 450;
+  }
+  // Relationship
+  .Relationship-UmVsYXRpb25zaGlw {
+    LineThickness: 2;
+    LineStyle: 10-10;
+    LineColor: #444444;
+    FontColor: #444444;
+    FontSize: 24;
+  }
+</style>
+
+rectangle "Developer Laptop\n<size:16>[Deployment Node: Microsoft Windows 10 or Apple macOS]</size>" <<Element-RWxlbWVudA==>> as Development.DeveloperLaptop {
+  rectangle "Web Browser\n<size:16>[Deployment Node: Chrome, Firefox, Safari, or Edge]</size>" <<Element-RWxlbWVudA==>> as Development.DeveloperLaptop.WebBrowser {
+    rectangle "==Single-Page Application\n<size:16>[Container: JavaScript and Angular]</size>\n\nProvides all of the Internet banking functionality to customers via their web browser." <<Element-RWxlbWVudCxDb250YWluZXIsV2ViIEJyb3dzZXI=>> as Development.DeveloperLaptop.WebBrowser.SinglePageApplication_1
+  }
+
+  rectangle "Docker Container - Web Server\n<size:16>[Deployment Node: Docker]</size>" <<Element-RWxlbWVudA==>> as Development.DeveloperLaptop.DockerContainerWebServer {
+    rectangle "Apache Tomcat\n<size:16>[Deployment Node: Apache Tomcat 8.x]</size>" <<Element-RWxlbWVudA==>> as Development.DeveloperLaptop.DockerContainerWebServer.ApacheTomcat {
+      rectangle "==Web Application\n<size:16>[Container: Java and Spring MVC]</size>\n\nDelivers the static content and the Internet banking single page application." <<Element-RWxlbWVudCxDb250YWluZXI=>> as Development.DeveloperLaptop.DockerContainerWebServer.ApacheTomcat.WebApplication_1
+      rectangle "==API Application\n<size:16>[Container: Java and Spring MVC]</size>\n\nProvides Internet banking functionality via a JSON/HTTPS API." <<Element-RWxlbWVudCxDb250YWluZXI=>> as Development.DeveloperLaptop.DockerContainerWebServer.ApacheTomcat.APIApplication_1
+    }
+
+  }
+
+  rectangle "Docker Container - Database Server\n<size:16>[Deployment Node: Docker]</size>" <<Element-RWxlbWVudA==>> as Development.DeveloperLaptop.DockerContainerDatabaseServer {
+    rectangle "Database Server\n<size:16>[Deployment Node: Oracle 12c]</size>" <<Element-RWxlbWVudA==>> as Development.DeveloperLaptop.DockerContainerDatabaseServer.DatabaseServer {
+      database "==Database\n<size:16>[Container: Oracle Database Schema]</size>\n\nStores user registration information, hashed authentication credentials, access logs, etc." <<Element-RWxlbWVudCxDb250YWluZXIsRGF0YWJhc2U=>> as Development.DeveloperLaptop.DockerContainerDatabaseServer.DatabaseServer.Database_1
+    }
+
+  }
+
+}
+
+rectangle "Big Bank plc\n<size:16>[Deployment Node: Big Bank plc data center]</size>" <<Element-RWxlbWVudA==>> as Development.BigBankplc {
+  rectangle "bigbank-dev001\n<size:16>[Deployment Node]</size>" <<Element-RWxlbWVudA==>> as Development.BigBankplc.bigbankdev001 {
+    rectangle "==Mainframe Banking System\n<size:16>[Software System]</size>\n\nStores all of the core banking information about customers, accounts, transactions, etc." <<Element-RWxlbWVudCxTb2Z0d2FyZSBTeXN0ZW0sRXhpc3RpbmcgU3lzdGVt>> as Development.BigBankplc.bigbankdev001.MainframeBankingSystem_1
+  }
+
+}
+
+Development.DeveloperLaptop.DockerContainerWebServer.ApacheTomcat.WebApplication_1 --> Development.DeveloperLaptop.WebBrowser.SinglePageApplication_1 <<Relationship-UmVsYXRpb25zaGlw>> : "Delivers to the customer's web browser"
+Development.DeveloperLaptop.WebBrowser.SinglePageApplication_1 --> Development.DeveloperLaptop.DockerContainerWebServer.ApacheTomcat.APIApplication_1 <<Relationship-UmVsYXRpb25zaGlw>> : "Makes API calls to\n<size:16>[JSON/HTTPS]</size>"
+Development.DeveloperLaptop.DockerContainerWebServer.ApacheTomcat.APIApplication_1 --> Development.DeveloperLaptop.DockerContainerDatabaseServer.DatabaseServer.Database_1 <<Relationship-UmVsYXRpb25zaGlw>> : "Reads from and writes to\n<size:16>[SQL/TCP]</size>"
+Development.DeveloperLaptop.DockerContainerWebServer.ApacheTomcat.APIApplication_1 --> Development.BigBankplc.bigbankdev001.MainframeBankingSystem_1 <<Relationship-UmVsYXRpb25zaGlw>> : "Makes API calls to\n<size:16>[XML/HTTPS]</size>"
+
+@enduml

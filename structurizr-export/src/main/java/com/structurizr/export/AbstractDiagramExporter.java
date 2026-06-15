@@ -13,7 +13,17 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
     protected static final String GROUP_SEPARATOR_PROPERTY_NAME = "structurizr.groupSeparator";
 
-    private Object frame = null;
+    protected final ColorScheme colorScheme;
+
+    protected Object frame = null;
+
+    public AbstractDiagramExporter() {
+        this(ColorScheme.Light);
+    }
+
+    public AbstractDiagramExporter(ColorScheme colorScheme) {
+        this.colorScheme = colorScheme;
+    }
 
     /**
      * Exports all views in the workspace.
@@ -26,7 +36,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
             throw new IllegalArgumentException("A workspace must be provided.");
         }
 
-        Collection<Diagram> diagrams = new ArrayList<>();
+        Collection<Diagram> diagrams = new ArrayList<>() ;
 
         for (CustomView view : workspace.getViews().getCustomViews()) {
             Diagram diagram = export(view);
@@ -120,14 +130,13 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         IndentingWriter writer = new IndentingWriter();
         writeHeader(view, writer);
 
-        List<GroupableElement> elements = new ArrayList<>();
-        for (ElementView elementView : view.getElements()) {
-            elements.add((CustomElement)elementView.getElement());
-        }
-
+        List<GroupableElement> elements = getGroupableElements(view, null);
         writeElements(view, elements, writer);
 
-        writer.writeLine();
+        if (!elements.isEmpty()) {
+            writer.writeLine();
+        }
+
         writeRelationships(view, writer);
         writeFooter(view, writer);
 
@@ -154,13 +163,13 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         IndentingWriter writer = new IndentingWriter();
         writeHeader(view, writer);
 
-        List<GroupableElement> elements = new ArrayList<>();
-        for (ElementView elementView : view.getElements()) {
-            elements.add((GroupableElement)elementView.getElement());
-        }
+        List<GroupableElement> elements = getGroupableElements(view, null);
         writeElements(view, elements, writer);
 
-        writer.writeLine();
+        if (!elements.isEmpty()) {
+            writer.writeLine();
+        }
+
         writeRelationships(view, writer);
         writeFooter(view, writer);
 
@@ -187,13 +196,13 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         IndentingWriter writer = new IndentingWriter();
         writeHeader(view, writer);
 
-        List<GroupableElement> elements = new ArrayList<>();
-        for (ElementView elementView : view.getElements()) {
-            elements.add((GroupableElement)elementView.getElement());
-        }
+        List<GroupableElement> elements = getGroupableElements(view, null);
         writeElements(view, elements, writer);
 
-        writer.writeLine();
+        if (!elements.isEmpty()) {
+            writer.writeLine();
+        }
+
         writeRelationships(view, writer);
         writeFooter(view, writer);
 
@@ -235,13 +244,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         for (SoftwareSystem softwareSystem : softwareSystems) {
             startSoftwareSystemBoundary(view, softwareSystem, writer);
 
-            List<GroupableElement> scopedElements = new ArrayList<>();
-            for (ElementView elementView : view.getElements()) {
-                if (elementView.getElement().getParent() == softwareSystem) {
-                    scopedElements.add((StaticStructureElement) elementView.getElement());
-                }
-            }
-
+            List<GroupableElement> scopedElements = getGroupableElements(view, softwareSystem);
             writeElements(view, scopedElements, writer);
 
             endSoftwareSystemBoundary(view, writer);
@@ -256,7 +259,23 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
     protected List<SoftwareSystem> getBoundarySoftwareSystems(ModelView view) {
         List<SoftwareSystem> softwareSystems = new ArrayList<>(view.getElements().stream().map(ElementView::getElement).filter(e -> e instanceof Container).map(c -> ((Container)c).getSoftwareSystem()).collect(Collectors.toSet()));
-        softwareSystems.sort(Comparator.comparing(Element::getId));
+
+        if (view instanceof DynamicView) {
+            Map<String, Integer> elementOrder = getFirstAppearanceOrder((DynamicView) view);
+            softwareSystems.sort(Comparator.comparingInt(ss -> {
+                int min = Integer.MAX_VALUE;
+                for (ElementView ev : view.getElements()) {
+                    Element e = ev.getElement();
+                    if (e instanceof Container && ((Container) e).getSoftwareSystem() == ss) {
+                        Integer idx = elementOrder.get(e.getId());
+                        if (idx != null && idx < min) min = idx;
+                    }
+                }
+                return min;
+            }));
+        } else {
+            softwareSystems.sort(Comparator.comparing(Element::getId));
+        }
 
         return softwareSystems;
     }
@@ -292,7 +311,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
             writer.writeLine();
         }
 
-        boolean includeSoftwareSystemBoundaries = "true".equals(view.getProperties().getOrDefault("structurizr.softwareSystemBoundaries", "false"));
+        boolean includeSoftwareSystemBoundaries = "true".equalsIgnoreCase(getViewOrViewSetProperty(view, "structurizr.softwareSystemBoundaries", "false"));
 
         List<Container> containers = getBoundaryContainers(view);
         Set<SoftwareSystem> softwareSystems = containers.stream().map(Container::getSoftwareSystem).collect(Collectors.toCollection(LinkedHashSet::new));
@@ -307,12 +326,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                 if (container.getSoftwareSystem() == softwareSystem) {
                     startContainerBoundary(view, container, writer);
 
-                    List<GroupableElement> scopedElements = new ArrayList<>();
-                    for (ElementView elementView : view.getElements()) {
-                        if (elementView.getElement().getParent() == container) {
-                            scopedElements.add((StaticStructureElement) elementView.getElement());
-                        }
-                    }
+                    List<GroupableElement> scopedElements = getGroupableElements(view, container);
                     writeElements(view, scopedElements, writer);
 
                     endContainerBoundary(view, writer);
@@ -334,7 +348,23 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
     protected List<Container> getBoundaryContainers(ModelView view) {
         List<Container> containers = new ArrayList<>(view.getElements().stream().map(ElementView::getElement).filter(e -> e instanceof Component).map(c -> ((Component)c).getContainer()).collect(Collectors.toSet()));
-        containers.sort(Comparator.comparing(Element::getId));
+
+        if (view instanceof DynamicView) {
+            Map<String, Integer> elementOrder = getFirstAppearanceOrder((DynamicView) view);
+            containers.sort(Comparator.comparingInt(container -> {
+                int min = Integer.MAX_VALUE;
+                for (ElementView ev : view.getElements()) {
+                    Element e = ev.getElement();
+                    if (e instanceof Component && ((Component) e).getContainer() == container) {
+                        Integer idx = elementOrder.get(e.getId());
+                        if (idx != null && idx < min) min = idx;
+                    }
+                }
+                return min;
+            }));
+        } else {
+            containers.sort(Comparator.comparing(Element::getId));
+        }
 
         return containers;
     }
@@ -358,7 +388,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         return diagram;
     }
 
-    public Diagram export(DynamicView view, String order) {
+     public Diagram export(DynamicView view, String order) {
         this.frame = order;
         IndentingWriter writer = new IndentingWriter();
         writeHeader(view, writer);
@@ -369,31 +399,31 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
         if (element == null) {
             // dynamic view with no scope
-            List<GroupableElement> elements = new ArrayList<>();
-            for (ElementView elementView : view.getElements()) {
-                elements.add((StaticStructureElement) elementView.getElement());
-            }
+            List<GroupableElement> elements = getGroupableElements(view, null);
             writeElements(view, elements, writer);
+
+            if (!elements.isEmpty()) {
+                elementsWritten = true;
+            }
         } else {
+            // Pre-compute first-appearance order so out-of-scope elements are emitted in step order
+            Map<String, Integer> firstAppearanceOrder = getFirstAppearanceOrder(view);
+
             if (element instanceof SoftwareSystem) {
                 // dynamic view with software system scope
                 List<SoftwareSystem> softwareSystems = getBoundarySoftwareSystems(view);
                 for (SoftwareSystem softwareSystem : softwareSystems) {
                     startSoftwareSystemBoundary(view, softwareSystem, writer);
 
-                    List<GroupableElement> scopedElements = new ArrayList<>();
-                    for (ElementView elementView : view.getElements()) {
-                        if (elementView.getElement().getParent() == softwareSystem) {
-                            scopedElements.add((StaticStructureElement) elementView.getElement());
-                        }
-                    }
-
+                    List<GroupableElement> scopedElements = getGroupableElements(view, softwareSystem);
                     writeElements(view, scopedElements, writer);
 
                     endSoftwareSystemBoundary(view, writer);
                 }
 
-                for (ElementView elementView : view.getElements()) {
+                List<ElementView> outOfScopeElements = new ArrayList<>(view.getElements());
+                outOfScopeElements.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+                for (ElementView elementView : outOfScopeElements) {
                     if (elementView.getElement().getParent() == null) {
                         writeElement(view, elementView.getElement(), writer);
                         elementsWritten = true;
@@ -401,8 +431,8 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                 }
             } else if (element instanceof Container) {
                 // dynamic view with container scope
-                boolean includeSoftwareSystemBoundaries = "true".equals(view.getProperties().getOrDefault("structurizr.softwareSystemBoundaries", "false"));
-
+                boolean includeSoftwareSystemBoundaries = "true".equalsIgnoreCase(getViewOrViewSetProperty(view, "structurizr.softwareSystemBoundaries", "false"));
+                
                 List<Container> containers = getBoundaryContainers(view);
                 Set<SoftwareSystem> softwareSystems = containers.stream().map(Container::getSoftwareSystem).collect(Collectors.toCollection(LinkedHashSet::new));
                 for (SoftwareSystem softwareSystem : softwareSystems) {
@@ -416,12 +446,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                         if (container.getSoftwareSystem() == softwareSystem) {
                             startContainerBoundary(view, container, writer);
 
-                            List<GroupableElement> scopedElements = new ArrayList<>();
-                            for (ElementView elementView : view.getElements()) {
-                                if (elementView.getElement().getParent() == container) {
-                                    scopedElements.add((StaticStructureElement) elementView.getElement());
-                                }
-                            }
+                            List<GroupableElement> scopedElements = getGroupableElements(view, container);
                             writeElements(view, scopedElements, writer);
 
                             endContainerBoundary(view, writer);
@@ -434,7 +459,9 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                     }
                 }
 
-                for (ElementView elementView : view.getElements()) {
+                List<ElementView> outOfScopeElements = new ArrayList<>(view.getElements());
+                outOfScopeElements.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+                for (ElementView elementView : outOfScopeElements) {
                     if (!(elementView.getElement().getParent() instanceof Container)) {
                         writeElement(view, elementView.getElement(), writer);
                         elementsWritten = true;
@@ -442,6 +469,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                 }
             }
         }
+
 
         if (elementsWritten) {
             writer.writeLine();
@@ -472,14 +500,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         IndentingWriter writer = new IndentingWriter();
         writeHeader(view, writer);
 
-        List<GroupableElement> elements = new ArrayList<>();
-
-        for (ElementView elementView : view.getElements()) {
-            if (elementView.getElement() instanceof DeploymentNode && elementView.getElement().getParent() == null) {
-                elements.add((DeploymentNode)elementView.getElement());
-            }
-        }
-
+        List<GroupableElement> elements = getGroupableElements(view, null);
         writeElements(view, elements, writer);
 
         writeRelationships(view, writer);
@@ -488,33 +509,52 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         return createDiagram(view, writer.toString());
     }
 
-    protected void writeElements(ModelView view, List<GroupableElement> elements, IndentingWriter writer) {
+    protected List<String> findGroups(ModelView view, List<GroupableElement> elements) {
         String groupSeparator = view.getModel().getProperties().get(GROUP_SEPARATOR_PROPERTY_NAME);
         boolean nested = !StringUtils.isNullOrEmpty(groupSeparator);
 
-        elements.sort(Comparator.comparing(Element::getId));
+        if (view instanceof DynamicView) {
+            Map<String, Integer> elementOrder = getFirstAppearanceOrder((DynamicView) view);
+            elements.sort(Comparator.comparingInt(e -> elementOrder.getOrDefault(e.getId(), Integer.MAX_VALUE)));
+        } else {
+            elements.sort(Comparator.comparing(Element::getId));
+        }
 
-        Set<String> groupsAsSet = new HashSet<>();
+        Set<String> groupsAsSet = new LinkedHashSet<>();
         for (GroupableElement element : elements) {
             String group = element.getGroup();
 
             if (!StringUtils.isNullOrEmpty(group)) {
-                groupsAsSet.add(group);
-
                 if (nested) {
-                    while (group.contains(groupSeparator)) {
-                        group = group.substring(0, group.lastIndexOf(groupSeparator));
-                        groupsAsSet.add(group);
+                    // Add parent groups first to preserve hierarchy order
+                    String[] parts = group.split(java.util.regex.Pattern.quote(groupSeparator));
+                    StringBuilder current = new StringBuilder();
+                    for (int i = 0; i < parts.length; i++) {
+                        if (i > 0) current.append(groupSeparator);
+                        current.append(parts[i]);
+                        groupsAsSet.add(current.toString());
                     }
+                } else {
+                    groupsAsSet.add(group);
                 }
             }
         }
 
         List<String> groupsAsList = new ArrayList<>(groupsAsSet);
-        Collections.sort(groupsAsList);
+        if (!(view instanceof DynamicView)) {
+            Collections.sort(groupsAsList);
+        }
+
+        return groupsAsList;
+    }
+
+    protected void writeElements(ModelView view, List<GroupableElement> elements, IndentingWriter writer) {
+        String groupSeparator = view.getModel().getProperties().get(GROUP_SEPARATOR_PROPERTY_NAME);
+        boolean nested = !StringUtils.isNullOrEmpty(groupSeparator);
+        List<String> groupsAsList = findGroups(view, elements);
 
         // first render grouped elements
-        if (groupsAsList.size() > 0) {
+        if (!groupsAsList.isEmpty()) {
             if (nested) {
                 String context = "";
 
@@ -585,25 +625,28 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         }
     }
 
-    protected void writeRelationships(ModelView view, IndentingWriter writer) {
-        Collection<RelationshipView> relationshipList;
-
+    protected Collection<RelationshipView> getRelationshipsInView(ModelView view) {
         if (view instanceof DynamicView) {
-            relationshipList = view.getRelationships();
+            return view.getRelationships();
         } else {
-            relationshipList = view.getRelationships().stream().sorted(Comparator.comparing(rv -> rv.getRelationship().getId())).collect(Collectors.toList());
+            return view.getRelationships().stream().sorted(Comparator.comparing(rv -> rv.getRelationship().getId())).collect(Collectors.toList());
         }
+    }
+
+    protected void writeRelationships(ModelView view, IndentingWriter writer) {
+        Collection<RelationshipView> relationshipList = getRelationshipsInView(view);
 
         for (RelationshipView relationshipView : relationshipList) {
             writeRelationship(view, relationshipView, writer);
+        }
+
+        if (!relationshipList.isEmpty()) {
+            writer.writeLine();
         }
     }
 
     protected abstract void writeHeader(ModelView view, IndentingWriter writer);
     protected abstract void writeFooter(ModelView view, IndentingWriter writer);
-
-    protected abstract void startEnterpriseBoundary(ModelView view, String enterpriseName, IndentingWriter writer);
-    protected abstract void endEnterpriseBoundary(ModelView view, IndentingWriter writer);
 
     protected abstract void startGroupBoundary(ModelView view, String group, IndentingWriter writer);
     protected abstract void endGroupBoundary(ModelView view, IndentingWriter writer);
@@ -733,6 +776,98 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
             view.getProperties().getOrDefault(name,
                     views.getConfiguration().getProperties().getOrDefault(name, defaultValue)
             );
+    }
+
+    @Override
+    protected ElementStyle findElementStyle(ModelView view, Element element) {
+        return view.getViewSet().getConfiguration().getStyles().findElementStyle(element, colorScheme);
+    }
+
+    protected ElementStyle findElementStyle(ModelView view, String tag) {
+        return view.getViewSet().getConfiguration().getStyles().findElementStyle(tag, colorScheme);
+    }
+
+    @Override
+    protected RelationshipStyle findRelationshipStyle(ModelView view, Relationship relationship) {
+        return view.getViewSet().getConfiguration().getStyles().findRelationshipStyle(relationship, colorScheme);
+    }
+
+    protected Map<String, Integer> getFirstAppearanceOrder(DynamicView view) {
+        Map<String, Integer> order = new LinkedHashMap<>();
+        int index = 0;
+        for (RelationshipView rv : view.getRelationships()) {
+            String sourceId = rv.getRelationship().getSourceId();
+            String destId = rv.getRelationship().getDestinationId();
+            if (!order.containsKey(sourceId)) {
+                order.put(sourceId, index++);
+            }
+            if (!order.containsKey(destId)) {
+                order.put(destId, index++);
+            }
+        }
+        return order;
+    }
+
+    protected List<GroupableElement> getGroupableElements(ModelView view, Element parent) {
+        List<GroupableElement> elements = new ArrayList<>();
+
+        if (view instanceof CustomView) {
+            for (ElementView elementView : view.getElements()) {
+                elements.add((CustomElement)elementView.getElement());
+            }
+        } else if (view instanceof SystemLandscapeView) {
+            for (ElementView elementView : view.getElements()) {
+                elements.add((GroupableElement)elementView.getElement());
+            }
+        } else if (view instanceof SystemContextView) {
+            for (ElementView elementView : view.getElements()) {
+                elements.add((GroupableElement)elementView.getElement());
+            }
+        } else if (view instanceof ContainerView) {
+            for (ElementView elementView : view.getElements()) {
+                if (elementView.getElement() instanceof Container) {
+                    elements.add((StaticStructureElement) elementView.getElement());
+                }
+            }
+        } else if (view instanceof ComponentView) {
+            for (ElementView elementView : view.getElements()) {
+                if (elementView.getElement() instanceof Component) {
+                    elements.add((StaticStructureElement) elementView.getElement());
+                }
+            }
+        } else if (view instanceof DynamicView) {
+            DynamicView dynamicView = (DynamicView)view;
+            Element element = dynamicView.getElement();
+            if (element == null) {
+                for (ElementView elementView : view.getElements()) {
+                    elements.add((StaticStructureElement) elementView.getElement());
+                }
+            } else if (element instanceof SoftwareSystem) {
+                for (ElementView elementView : view.getElements()) {
+                    if (elementView.getElement() instanceof Container) {
+                        elements.add((StaticStructureElement) elementView.getElement());
+                    }
+                }
+            } else if (element instanceof Container) {
+            for (ElementView elementView : view.getElements()) {
+                if (elementView.getElement() instanceof Component) {
+                    elements.add((StaticStructureElement) elementView.getElement());
+                }
+            }
+        }
+        } else if (view instanceof DeploymentView) {
+            for (ElementView elementView : view.getElements()) {
+                if (elementView.getElement() instanceof DeploymentNode && elementView.getElement().getParent() == null) {
+                    elements.add((DeploymentNode)elementView.getElement());
+                }
+            }
+        }
+
+        if (parent != null) {
+            return elements.stream().filter(e -> e.getParent() == parent).collect(Collectors.toList());
+        } else {
+            return elements;
+        }
     }
 
 }
