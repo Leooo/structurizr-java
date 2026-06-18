@@ -119,11 +119,19 @@ public class MermaidDiagramExporter extends AbstractDiagramExporter {
     @Override
     protected void startSoftwareSystemBoundary(ModelView view, SoftwareSystem softwareSystem, IndentingWriter writer) {
         ElementStyle elementStyle = view.getViewSet().getConfiguration().getStyles().findElementStyle(softwareSystem);
-        String color = elementStyle.getStroke();
+        String background = elementStyle.getBackground();
+        String stroke = elementStyle.getStroke();
+        String color = elementStyle.getColor();
+        String type = typeOf(view, softwareSystem, true);
 
-        writer.writeLine(String.format("subgraph %s [\"%s\"]", softwareSystem.getId(), softwareSystem.getName()));
+        String label = softwareSystem.getName();
+        if (!StringUtils.isNullOrEmpty(type)) {
+            label += "<br/><span style='font-size: 70%'>" + type + "</span>";
+        }
+
+        writer.writeLine(String.format("subgraph %s [\"%s\"]", softwareSystem.getId(), label));
         writer.indent();
-        writer.writeLine(String.format("style %s fill:#ffffff,stroke:%s,color:%s", softwareSystem.getId(), color, color));
+        writer.writeLine(String.format("style %s fill:%s,stroke:%s,color:%s", softwareSystem.getId(), background, stroke, color));
         writer.writeLine();
     }
 
@@ -137,11 +145,19 @@ public class MermaidDiagramExporter extends AbstractDiagramExporter {
     @Override
     protected void startContainerBoundary(ModelView view, Container container, IndentingWriter writer) {
         ElementStyle elementStyle = view.getViewSet().getConfiguration().getStyles().findElementStyle(container);
-        String color = elementStyle.getStroke();
+        String background = elementStyle.getBackground();
+        String stroke = elementStyle.getStroke();
+        String color = elementStyle.getColor();
+        String type = typeOf(view, container, true);
 
-        writer.writeLine(String.format("subgraph %s [\"%s\"]", container.getId(), container.getName()));
+        String label = container.getName();
+        if (!StringUtils.isNullOrEmpty(type)) {
+            label += "<br/><span style='font-size: 70%'>" + type + "</span>";
+        }
+
+        writer.writeLine(String.format("subgraph %s [\"%s\"]", container.getId(), label));
         writer.indent();
-        writer.writeLine(String.format("style %s fill:#ffffff,stroke:%s,color:%s", container.getId(), color, color));
+        writer.writeLine(String.format("style %s fill:%s,stroke:%s,color:%s", container.getId(), background, stroke, color));
         writer.writeLine();
     }
 
@@ -156,9 +172,19 @@ public class MermaidDiagramExporter extends AbstractDiagramExporter {
     protected void startDeploymentNodeBoundary(DeploymentView view, DeploymentNode deploymentNode, IndentingWriter writer) {
         ElementStyle elementStyle = view.getViewSet().getConfiguration().getStyles().findElementStyle(deploymentNode);
 
-        writer.writeLine(String.format("subgraph %s [\"%s\"]", deploymentNode.getId(), deploymentNode.getName()));
+        String background = elementStyle.getBackground();
+        String stroke = elementStyle.getStroke();
+        String color = elementStyle.getColor();
+        String type = typeOf(view, deploymentNode, true);
+
+        String label = deploymentNode.getName();
+        if (!StringUtils.isNullOrEmpty(type)) {
+            label += "<br/><span style='font-size: 70%'>" + type + "</span>";
+        }
+
+        writer.writeLine(String.format("subgraph %s [\"%s\"]", deploymentNode.getId(), label));
         writer.indent();
-        writer.writeLine(String.format("style %s fill:#ffffff,stroke:%s,color:%s", deploymentNode.getId(), elementStyle.getStroke(), elementStyle.getColor()));
+        writer.writeLine(String.format("style %s fill:%s,stroke:%s,color:%s", deploymentNode.getId(), background, stroke, color));
         writer.writeLine();
     }
 
