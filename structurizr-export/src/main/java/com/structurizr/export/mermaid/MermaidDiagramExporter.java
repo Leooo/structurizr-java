@@ -7,7 +7,11 @@ import com.structurizr.model.*;
 import com.structurizr.util.StringUtils;
 import com.structurizr.view.*;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static java.lang.String.format;
@@ -209,22 +213,71 @@ public class MermaidDiagramExporter extends AbstractDiagramExporter {
                 elements.add(relationshipView.getRelationship().getDestination());
             }
 
+            // Build companion CSS for per-participant fill/stroke/colour.
+            // Mermaid hardcodes fill="#eaeaea" on participant rect elements; CSS with !important
+            // overrides inline SVG presentation attributes per the CSS Cascade spec.
+            StringBuilder cssBuilder = new StringBuilder();
+
+            // Group participants by (softwareSystem, container) to emit Mermaid box blocks.
+            // Key = "SystemName / ContainerName" for components, null for top-level elements.
+            // Preserves the order elements first appear across relationships.
+            Map<String, List<Element>> boxGroups = new LinkedHashMap<>();
+            List<Element> ungroupedElements = new ArrayList<>();
+
             for (Element element : elements) {
-                ElementStyle elementStyle = view.getViewSet().getConfiguration().getStyles().findElementStyle(element);
-                String shape = "participant";
-                if (elementStyle.getShape() == Shape.Person) {
-                    shape = "actor";
+                Container container = null;
+                SoftwareSystem softwareSystem = null;
+
+                if (element instanceof Component) {
+                    container = ((Component) element).getContainer();
+                    softwareSystem = container.getSoftwareSystem();
+                } else if (element instanceof Container) {
+                    softwareSystem = ((Container) element).getSoftwareSystem();
                 }
 
-                String type = typeOf(view, element, true);
+                if (container != null && softwareSystem != null) {
+                    String boxLabel = softwareSystem.getName() + " / " + container.getName();
+                    boxGroups.computeIfAbsent(boxLabel, k -> new ArrayList<>()).add(element);
+                } else if (softwareSystem != null) {
+                    String boxLabel = softwareSystem.getName();
+                    boxGroups.computeIfAbsent(boxLabel, k -> new ArrayList<>()).add(element);
+                } else {
+                    ungroupedElements.add(element);
+                }
+            }
 
-                if (StringUtils.isNullOrEmpty(type) || false == elementStyle.getMetadata()) {
+            // Emit ungrouped participants first (Persons, external SoftwareSystems with no container context)
+            for (Element element : ungroupedElements) {
+                ElementStyle elementStyle = view.getViewSet().getConfiguration().getStyles().findElementStyle(element);
+                String shape = elementStyle.getShape() == Shape.Person ? "actor" : "participant";
+                String type = typeOf(view, element, true);
+                if (StringUtils.isNullOrEmpty(type) || !Boolean.TRUE.equals(elementStyle.getMetadata())) {
                     type = "";
                 } else {
                     type = "<br />" + type;
                 }
-
                 writer.writeLine(String.format("%s %s as %s%s", shape, element.getId(), element.getName(), type));
+                appendParticipantCss(cssBuilder, element.getId(), elementStyle);
+            }
+
+            // Emit grouped participants inside box blocks
+            for (Map.Entry<String, List<Element>> entry : boxGroups.entrySet()) {
+                writer.writeLine(String.format("box %s", entry.getKey()));
+                writer.indent();
+                for (Element element : entry.getValue()) {
+                    ElementStyle elementStyle = view.getViewSet().getConfiguration().getStyles().findElementStyle(element);
+                    String shape = elementStyle.getShape() == Shape.Person ? "actor" : "participant";
+                    String type = typeOf(view, element, true);
+                    if (StringUtils.isNullOrEmpty(type) || !Boolean.TRUE.equals(elementStyle.getMetadata())) {
+                        type = "";
+                    } else {
+                        type = "<br />" + type;
+                    }
+                    writer.writeLine(String.format("%s %s as %s%s", shape, element.getId(), element.getName(), type));
+                    appendParticipantCss(cssBuilder, element.getId(), elementStyle);
+                }
+                writer.outdent();
+                writer.writeLine("end");
             }
 
             writer.writeLine();
@@ -264,9 +317,25 @@ public class MermaidDiagramExporter extends AbstractDiagramExporter {
                         technology));
             }
 
-            return createDiagram(view, writer.toString());
+            MermaidDiagram diagram = (MermaidDiagram) createDiagram(view, writer.toString());
+            if (cssBuilder.length() > 0) {
+                diagram.setCssContent(cssBuilder.toString());
+            }
+            return diagram;
         } else {
             return super.export(view);
+        }
+    }
+
+    private void appendParticipantCss(StringBuilder cssBuilder, String id, ElementStyle elementStyle) {
+        String bg = elementStyle.getBackground();
+        String stroke = elementStyle.getStroke();
+        String color = elementStyle.getColor();
+        if (!StringUtils.isNullOrEmpty(bg)) {
+            cssBuilder.append(String.format("rect.actor[name=\"%s\"] { fill: %s !important; stroke: %s !important; }%n", id, bg, StringUtils.isNullOrEmpty(stroke) ? bg : stroke));
+        }
+        if (!StringUtils.isNullOrEmpty(color)) {
+            cssBuilder.append(String.format("g[data-id=\"%s\"] text.actor > tspan { fill: %s !important; }%n", id, color));
         }
     }
 

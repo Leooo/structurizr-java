@@ -487,33 +487,39 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
     }
 
     @Test
-    public void test_renderCustomView() {
+    public void test_sequenceDiagram_companionCssPerParticipant() {
         Workspace workspace = new Workspace("Name", "Description");
         Model model = workspace.getModel();
+        ViewSet views = workspace.getViews();
 
-        CustomElement a = model.addCustomElement("A");
-        CustomElement b = model.addCustomElement("B", "Custom", "Description");
-        a.uses(b, "Uses");
+        SoftwareSystem webApp = model.addSoftwareSystem("Web App");
+        Container control = webApp.addContainer("My Control");
+        Container logic = webApp.addContainer("My Logic");
+        control.uses(logic, "command");
 
-        CustomView view = workspace.getViews().createCustomView("key", "Title", "Description");
-        view.addDefaultElements();
+        DynamicView view = views.createDynamicView(webApp, "DynKey", "Dynamic");
+        view.add(control, "step 1", logic);
+        view.addProperty("mermaid.sequenceDiagram", "true");
 
-        Diagram diagram = new MermaidDiagramExporter().export(view);
-        assertEquals("""
-                graph TB
-                  linkStyle default fill:#ffffff
-                
-                  subgraph diagram ["Title"]
-                    style diagram fill:#ffffff,stroke:#ffffff
-                
-                    1["<div style='font-weight: bold'>A</div><div style='font-size: 70%; margin-top: 0px'></div>"]
-                    style 1 fill:#ffffff,stroke:#444444,color:#444444
-                    2["<div style='font-weight: bold'>B</div><div style='font-size: 70%; margin-top: 0px'>[Custom]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
-                    style 2 fill:#ffffff,stroke:#444444,color:#444444
-                
-                    1-. "<div>Uses</div><div style='font-size: 70%'></div>" .->2
+        views.getConfiguration().getStyles().addElementStyle("Element").background("#aabbcc").stroke("#001122").color("#334455");
 
-                  end""", diagram.getDefinition());
+        MermaidDiagramExporter exporter = new MermaidDiagramExporter();
+        Diagram diagram = exporter.export(view);
+
+        assertTrue(diagram instanceof MermaidDiagram, "Expected MermaidDiagram");
+        MermaidDiagram mermaidDiagram = (MermaidDiagram) diagram;
+        assertTrue(mermaidDiagram.hasCssContent(), "Expected companion CSS content for sequence diagram");
+
+        String css = mermaidDiagram.getCssContent();
+        // Each participant should have a fill rule keyed by element ID
+        String controlId = control.getId();
+        String logicId = logic.getId();
+        assertTrue(css.contains("rect.actor[name=\"" + controlId + "\"]"), "Expected CSS rule for control participant");
+        assertTrue(css.contains("rect.actor[name=\"" + logicId + "\"]"), "Expected CSS rule for logic participant");
+        assertTrue(css.contains("#aabbcc"), "Expected background colour in CSS");
+        assertTrue(css.contains("#001122"), "Expected stroke colour in CSS");
+        assertTrue(css.contains("g[data-id=\"" + controlId + "\"] text.actor > tspan"), "Expected text colour rule for control");
+        assertTrue(css.contains("#334455"), "Expected font colour in CSS");
     }
 
 }
