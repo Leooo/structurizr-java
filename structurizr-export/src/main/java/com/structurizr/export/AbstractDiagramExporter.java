@@ -15,7 +15,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
     protected final ColorScheme colorScheme;
 
-    private Object frame = null;
+    protected Object frame = null;
 
     public AbstractDiagramExporter() {
         this(ColorScheme.Light);
@@ -259,7 +259,23 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
     protected List<SoftwareSystem> getBoundarySoftwareSystems(ModelView view) {
         List<SoftwareSystem> softwareSystems = new ArrayList<>(view.getElements().stream().map(ElementView::getElement).filter(e -> e instanceof Container).map(c -> ((Container)c).getSoftwareSystem()).collect(Collectors.toSet()));
-        softwareSystems.sort(Comparator.comparing(Element::getId));
+
+        if (view instanceof DynamicView) {
+            Map<String, Integer> elementOrder = getFirstAppearanceOrder((DynamicView) view);
+            softwareSystems.sort(Comparator.comparingInt(ss -> {
+                int min = Integer.MAX_VALUE;
+                for (ElementView ev : view.getElements()) {
+                    Element e = ev.getElement();
+                    if (e instanceof Container && ((Container) e).getSoftwareSystem() == ss) {
+                        Integer idx = elementOrder.get(e.getId());
+                        if (idx != null && idx < min) min = idx;
+                    }
+                }
+                return min;
+            }));
+        } else {
+            softwareSystems.sort(Comparator.comparing(Element::getId));
+        }
 
         return softwareSystems;
     }
@@ -332,7 +348,23 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
 
     protected List<Container> getBoundaryContainers(ModelView view) {
         List<Container> containers = new ArrayList<>(view.getElements().stream().map(ElementView::getElement).filter(e -> e instanceof Component).map(c -> ((Component)c).getContainer()).collect(Collectors.toSet()));
-        containers.sort(Comparator.comparing(Element::getId));
+
+        if (view instanceof DynamicView) {
+            Map<String, Integer> elementOrder = getFirstAppearanceOrder((DynamicView) view);
+            containers.sort(Comparator.comparingInt(container -> {
+                int min = Integer.MAX_VALUE;
+                for (ElementView ev : view.getElements()) {
+                    Element e = ev.getElement();
+                    if (e instanceof Component && ((Component) e).getContainer() == container) {
+                        Integer idx = elementOrder.get(e.getId());
+                        if (idx != null && idx < min) min = idx;
+                    }
+                }
+                return min;
+            }));
+        } else {
+            containers.sort(Comparator.comparing(Element::getId));
+        }
 
         return containers;
     }
@@ -356,7 +388,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         return diagram;
     }
 
-    public Diagram export(DynamicView view, String order) {
+     public Diagram export(DynamicView view, String order) {
         this.frame = order;
         IndentingWriter writer = new IndentingWriter();
         writeHeader(view, writer);
@@ -374,6 +406,9 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                 elementsWritten = true;
             }
         } else {
+            // Pre-compute first-appearance order so out-of-scope elements are emitted in step order
+            Map<String, Integer> firstAppearanceOrder = getFirstAppearanceOrder(view);
+
             if (element instanceof SoftwareSystem) {
                 // dynamic view with software system scope
                 List<SoftwareSystem> softwareSystems = getBoundarySoftwareSystems(view);
@@ -386,7 +421,9 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                     endSoftwareSystemBoundary(view, writer);
                 }
 
-                for (ElementView elementView : view.getElements()) {
+                List<ElementView> outOfScopeElements = new ArrayList<>(view.getElements());
+                outOfScopeElements.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+                for (ElementView elementView : outOfScopeElements) {
                     if (elementView.getElement().getParent() == null) {
                         writeElement(view, elementView.getElement(), writer);
                         elementsWritten = true;
@@ -422,7 +459,9 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                     }
                 }
 
-                for (ElementView elementView : view.getElements()) {
+                List<ElementView> outOfScopeElements = new ArrayList<>(view.getElements());
+                outOfScopeElements.sort(Comparator.comparingInt(ev -> firstAppearanceOrder.getOrDefault(ev.getId(), Integer.MAX_VALUE)));
+                for (ElementView elementView : outOfScopeElements) {
                     if (!(elementView.getElement().getParent() instanceof Container)) {
                         writeElement(view, elementView.getElement(), writer);
                         elementsWritten = true;
@@ -430,6 +469,7 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
                 }
             }
         }
+
 
         if (elementsWritten) {
             writer.writeLine();
@@ -473,26 +513,37 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
         String groupSeparator = view.getModel().getProperties().get(GROUP_SEPARATOR_PROPERTY_NAME);
         boolean nested = !StringUtils.isNullOrEmpty(groupSeparator);
 
-        elements.sort(Comparator.comparing(Element::getId));
+        if (view instanceof DynamicView) {
+            Map<String, Integer> elementOrder = getFirstAppearanceOrder((DynamicView) view);
+            elements.sort(Comparator.comparingInt(e -> elementOrder.getOrDefault(e.getId(), Integer.MAX_VALUE)));
+        } else {
+            elements.sort(Comparator.comparing(Element::getId));
+        }
 
-        Set<String> groupsAsSet = new HashSet<>();
+        Set<String> groupsAsSet = new LinkedHashSet<>();
         for (GroupableElement element : elements) {
             String group = element.getGroup();
 
             if (!StringUtils.isNullOrEmpty(group)) {
-                groupsAsSet.add(group);
-
                 if (nested) {
-                    while (group.contains(groupSeparator)) {
-                        group = group.substring(0, group.lastIndexOf(groupSeparator));
-                        groupsAsSet.add(group);
+                    // Add parent groups first to preserve hierarchy order
+                    String[] parts = group.split(java.util.regex.Pattern.quote(groupSeparator));
+                    StringBuilder current = new StringBuilder();
+                    for (int i = 0; i < parts.length; i++) {
+                        if (i > 0) current.append(groupSeparator);
+                        current.append(parts[i]);
+                        groupsAsSet.add(current.toString());
                     }
+                } else {
+                    groupsAsSet.add(group);
                 }
             }
         }
 
         List<String> groupsAsList = new ArrayList<>(groupsAsSet);
-        Collections.sort(groupsAsList);
+        if (!(view instanceof DynamicView)) {
+            Collections.sort(groupsAsList);
+        }
 
         return groupsAsList;
     }
@@ -739,6 +790,22 @@ public abstract class AbstractDiagramExporter extends AbstractExporter implement
     @Override
     protected RelationshipStyle findRelationshipStyle(ModelView view, Relationship relationship) {
         return view.getViewSet().getConfiguration().getStyles().findRelationshipStyle(relationship, colorScheme);
+    }
+
+    protected Map<String, Integer> getFirstAppearanceOrder(DynamicView view) {
+        Map<String, Integer> order = new LinkedHashMap<>();
+        int index = 0;
+        for (RelationshipView rv : view.getRelationships()) {
+            String sourceId = rv.getRelationship().getSourceId();
+            String destId = rv.getRelationship().getDestinationId();
+            if (!order.containsKey(sourceId)) {
+                order.put(sourceId, index++);
+            }
+            if (!order.containsKey(destId)) {
+                order.put(destId, index++);
+            }
+        }
+        return order;
     }
 
     protected List<GroupableElement> getGroupableElements(ModelView view, Element parent) {

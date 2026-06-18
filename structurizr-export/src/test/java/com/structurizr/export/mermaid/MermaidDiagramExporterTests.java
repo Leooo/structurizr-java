@@ -14,6 +14,7 @@ import java.io.File;
 import java.util.Collection;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MermaidDiagramExporterTests extends AbstractExporterTests {
 
@@ -139,7 +140,7 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
                     3["<div style='font-weight: bold'>C</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
                     style 3 fill:#ffffff,stroke:#444444,color:#444444
                 
-                    subgraph 4 ["D"]
+                    subgraph 4 ["D<br/><span style='font-size: 70%'>[Software System]</span>"]
                       style 4 fill:#ffffff,stroke:#444444,color:#444444
                 
                       subgraph group1 ["Group 4"]
@@ -155,7 +156,7 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
                 
                     3-. "<div></div><div style='font-size: 70%'></div>" .->5
                     3-. "<div></div><div style='font-size: 70%'></div>" .->6
-
+                
                   end""", diagram.getDefinition());
 
         diagram = diagrams.stream().filter(md -> md.getKey().equals("Components")).findFirst().get();
@@ -169,7 +170,7 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
                     3["<div style='font-weight: bold'>C</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
                     style 3 fill:#ffffff,stroke:#444444,color:#444444
                 
-                    subgraph 6 ["F"]
+                    subgraph 6 ["F<br/><span style='font-size: 70%'>[Container]</span>"]
                       style 6 fill:#ffffff,stroke:#444444,color:#444444
                 
                       subgraph group1 ["Group 5"]
@@ -186,7 +187,7 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
                     3-. "<div></div><div style='font-size: 70%'></div>" .->7
                     3-. "<div></div><div style='font-size: 70%'></div>" .->8
                     7-. "<div></div><div style='font-size: 70%'></div>" .->8
-
+                
                   end""", diagram.getDefinition());
     }
 
@@ -285,14 +286,14 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
                   subgraph diagram ["Container View: Software System 1"]
                     style diagram fill:#ffffff,stroke:#ffffff
                 
-                    subgraph 1 ["Software System 1"]
+                    subgraph 1 ["Software System 1<br/><span style='font-size: 70%'>[Software System]</span>"]
                       style 1 fill:#ffffff,stroke:#444444,color:#444444
                 
                       2["<div style='font-weight: bold'>Container 1</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
                       style 2 fill:#ffffff,stroke:#444444,color:#444444
                     end
                 
-                    subgraph 3 ["Software System 2"]
+                    subgraph 3 ["Software System 2<br/><span style='font-size: 70%'>[Software System]</span>"]
                       style 3 fill:#ffffff,stroke:#444444,color:#444444
                 
                       4["<div style='font-weight: bold'>Container 2</div><div style='font-size: 70%; margin-top: 0px'>[Container]</div>"]
@@ -328,14 +329,14 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
                   subgraph diagram ["Component View: Software System 1 - Container 1"]
                     style diagram fill:#ffffff,stroke:#ffffff
                 
-                    subgraph 2 ["Container 1"]
+                    subgraph 2 ["Container 1<br/><span style='font-size: 70%'>[Container]</span>"]
                       style 2 fill:#ffffff,stroke:#444444,color:#444444
                 
                       3["<div style='font-weight: bold'>Component 1</div><div style='font-size: 70%; margin-top: 0px'>[Component]</div>"]
                       style 3 fill:#ffffff,stroke:#444444,color:#444444
                     end
                 
-                    subgraph 5 ["Container 2"]
+                    subgraph 5 ["Container 2<br/><span style='font-size: 70%'>[Container]</span>"]
                       style 5 fill:#ffffff,stroke:#444444,color:#444444
                 
                       6["<div style='font-weight: bold'>Component 2</div><div style='font-size: 70%; margin-top: 0px'>[Component]</div>"]
@@ -429,33 +430,96 @@ public class MermaidDiagramExporterTests extends AbstractExporterTests {
     }
 
     @Test
-    public void test_renderCustomView() {
+    public void test_boundaryFillColour_softwareSystem() {
+        // Software system boundaries should use the element's background colour as the subgraph fill,
+        // not a hardcoded white. This mirrors the PlantUML exporter behaviour.
         Workspace workspace = new Workspace("Name", "Description");
-        Model model = workspace.getModel();
+        SoftwareSystem system = workspace.getModel().addSoftwareSystem("My System");
+        Container container = system.addContainer("Container A");
 
-        CustomElement a = model.addCustomElement("A");
-        CustomElement b = model.addCustomElement("B", "Custom", "Description");
-        a.uses(b, "Uses");
+        ContainerView view = workspace.getViews().createContainerView(system, "Containers", "");
+        view.add(container);
 
-        CustomView view = workspace.getViews().createCustomView("key", "Title", "Description");
-        view.addDefaultElements();
+        workspace.getViews().getConfiguration().getStyles().addElementStyle("Software System")
+                .background("#ff0000").stroke("#cc0000").color("#ffffff");
 
         Diagram diagram = new MermaidDiagramExporter().export(view);
-        assertEquals("""
-                graph TB
-                  linkStyle default fill:#ffffff
-                
-                  subgraph diagram ["Title"]
-                    style diagram fill:#ffffff,stroke:#ffffff
-                
-                    1["<div style='font-weight: bold'>A</div><div style='font-size: 70%; margin-top: 0px'></div>"]
-                    style 1 fill:#ffffff,stroke:#444444,color:#444444
-                    2["<div style='font-weight: bold'>B</div><div style='font-size: 70%; margin-top: 0px'>[Custom]</div><div style='font-size: 80%; margin-top:10px'>Description</div>"]
-                    style 2 fill:#ffffff,stroke:#444444,color:#444444
-                
-                    1-. "<div>Uses</div><div style='font-size: 70%'></div>" .->2
+        String def = diagram.getDefinition();
 
-                  end""", diagram.getDefinition());
+        // The software system subgraph must use the styled background, not #ffffff
+        assertTrue(def.contains("style 1 fill:#ff0000,stroke:#cc0000,color:#ffffff"),
+                "Software system boundary fill should use element background colour.\nActual:\n" + def);
+        // Label must include type annotation
+        assertTrue(def.contains("My System<br/><span style='font-size: 70%'>[Software System]</span>"),
+                "Software system boundary label should include type annotation.\nActual:\n" + def);
+    }
+
+    @Test
+    public void test_boundaryFillColour_container() {
+        // Container boundaries should use the element's background colour as the subgraph fill.
+        Workspace workspace = new Workspace("Name", "Description");
+        SoftwareSystem system1 = workspace.getModel().addSoftwareSystem("System 1");
+        Container container1 = system1.addContainer("Container 1");
+        Component component1 = container1.addComponent("Component 1");
+        SoftwareSystem system2 = workspace.getModel().addSoftwareSystem("System 2");
+        Container container2 = system2.addContainer("Domain");
+        Component component2 = container2.addComponent("Component 2");
+        component1.uses(component2, "Uses");
+
+        ComponentView view = workspace.getViews().createComponentView(container1, "Components", "");
+        view.add(component1);
+        view.add(component2);
+
+        workspace.getViews().getConfiguration().getStyles().addElementStyle("Container")
+                .background("#225763").stroke("#173c45").color("#ffffff");
+
+        Diagram diagram = new MermaidDiagramExporter().export(view);
+        String def = diagram.getDefinition();
+
+        // Both container subgraphs should use the styled background colour
+        assertTrue(def.contains("style 2 fill:#225763,stroke:#173c45,color:#ffffff"),
+                "Container 1 boundary fill should use element background colour.\nActual:\n" + def);
+        assertTrue(def.contains("style 5 fill:#225763,stroke:#173c45,color:#ffffff"),
+                "Container 2 boundary fill should use element background colour.\nActual:\n" + def);
+        // Labels must include type annotations
+        assertTrue(def.contains("Container 1<br/><span style='font-size: 70%'>[Container]</span>"),
+                "Container boundary label should include type annotation.\nActual:\n" + def);
+    }
+
+    @Test
+    public void test_sequenceDiagram_companionCssPerParticipant() {
+        Workspace workspace = new Workspace("Name", "Description");
+        Model model = workspace.getModel();
+        ViewSet views = workspace.getViews();
+
+        SoftwareSystem webApp = model.addSoftwareSystem("Web App");
+        Container control = webApp.addContainer("My Control");
+        Container logic = webApp.addContainer("My Logic");
+        control.uses(logic, "command");
+
+        DynamicView view = views.createDynamicView(webApp, "DynKey", "Dynamic");
+        view.add(control, "step 1", logic);
+        view.addProperty("mermaid.sequenceDiagram", "true");
+
+        views.getConfiguration().getStyles().addElementStyle("Element").background("#aabbcc").stroke("#001122").color("#334455");
+
+        MermaidDiagramExporter exporter = new MermaidDiagramExporter();
+        Diagram diagram = exporter.export(view);
+
+        assertTrue(diagram instanceof MermaidDiagram, "Expected MermaidDiagram");
+        MermaidDiagram mermaidDiagram = (MermaidDiagram) diagram;
+        assertTrue(mermaidDiagram.hasCssContent(), "Expected companion CSS content for sequence diagram");
+
+        String css = mermaidDiagram.getCssContent();
+        // Each participant should have a fill rule keyed by element ID
+        String controlId = control.getId();
+        String logicId = logic.getId();
+        assertTrue(css.contains("rect.actor[name=\"" + controlId + "\"]"), "Expected CSS rule for control participant");
+        assertTrue(css.contains("rect.actor[name=\"" + logicId + "\"]"), "Expected CSS rule for logic participant");
+        assertTrue(css.contains("#aabbcc"), "Expected background colour in CSS");
+        assertTrue(css.contains("#001122"), "Expected stroke colour in CSS");
+        assertTrue(css.contains("g[data-id=\"" + controlId + "\"] text.actor > tspan"), "Expected text colour rule for control");
+        assertTrue(css.contains("#334455"), "Expected font colour in CSS");
     }
 
 }
